@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Calendar, Zap, Brain } from "lucide-react";
+import { Home, Settings, Zap, Brain } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/", icon: Home, label: "Home" },
-  { href: "/cron", icon: Calendar, label: "Cron" },
-  { href: "/scripts", icon: Zap, label: "Scripts" },
+  { href: "/config", icon: Settings, label: "Config" },
+  { href: "/actions", icon: Zap, label: "Actions" },
   { href: "/memory", icon: Brain, label: "Memory" },
 ];
 
@@ -16,7 +16,7 @@ export function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-zinc-900/95 backdrop-blur-sm border-t border-zinc-800 z-50">
+    <nav className="fixed bottom-0 left-0 right-0 bg-zinc-900/95 backdrop-blur-sm border-t border-zinc-800 z-40">
       <div className="max-w-2xl mx-auto flex justify-around items-center h-16">
         {navItems.map((item) => {
           const isActive = pathname === item.href;

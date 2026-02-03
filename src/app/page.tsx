@@ -1,16 +1,18 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { StatusCard } from "@/components/status-ring";
 import { SoulCard } from "@/components/soul-card";
 import { CronTimeline } from "@/components/cron-timeline";
-import { QuickAction, QuickActionsGrid } from "@/components/quick-action";
-import { RefreshCw } from "lucide-react";
+import { FavoritesGrid } from "@/components/favorites-grid";
+import { AgentLevelBadge } from "@/components/agent-level";
+import { RefreshCw, Sparkles } from "lucide-react";
+import { useLocalStorage } from "@/lib/use-local-storage";
 import {
   getCronJobs,
   getLastHeartbeat,
   getGatewayHealth,
-  runCronJob,
   type CronJob,
   type HeartbeatEvent,
 } from "@/lib/gateway-api";
@@ -44,6 +46,7 @@ function formatRelativeTime(ts?: number): string {
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [connected, setConnected] = useState(false);
   const [uptime, setUptime] = useState<number | undefined>();
   const [cronJobs, setCronJobs] = useState<CronJob[]>([]);
@@ -51,7 +54,10 @@ export default function DashboardPage() {
   const [soul, setSoul] = useState<string>("");
   const [soulLoading, setSoulLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [runningStandup, setRunningStandup] = useState(false);
+  const [proposals, setProposals] = useState<string>("");
+  
+  // Favorites stored in localStorage
+  const [favorites, setFavorites] = useLocalStorage<string[]>("pinned-scripts", []);
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
@@ -83,36 +89,40 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, [refresh]);
 
-  // Fetch SOUL.md content
+  // Fetch SOUL.md and PROPOSALS.md content
   useEffect(() => {
-    async function fetchSoul() {
+    async function fetchWorkspaceFiles() {
       try {
-        const res = await fetch("/api/workspace?file=SOUL.md");
-        const data = await res.json();
-        setSoul(data.content || "");
+        const [soulRes, proposalsRes] = await Promise.all([
+          fetch("/api/workspace?file=SOUL.md"),
+          fetch("/api/workspace?file=PROPOSALS.md").catch(() => null),
+        ]);
+        
+        const soulData = await soulRes.json();
+        setSoul(soulData.content || "");
+        
+        if (proposalsRes) {
+          const proposalsData = await proposalsRes.json();
+          setProposals(proposalsData.content || "");
+        }
       } catch {
         setSoul("");
       } finally {
         setSoulLoading(false);
       }
     }
-    fetchSoul();
+    fetchWorkspaceFiles();
   }, []);
 
-  const handleRunStandup = async () => {
-    const standupJob = cronJobs.find((j) =>
-      j.name.toLowerCase().includes("standup")
-    );
-    if (!standupJob) return;
-    
-    setRunningStandup(true);
+  const handleRunScript = async (scriptName: string) => {
     try {
-      await runCronJob(standupJob.id);
-      await refresh();
+      await fetch("/api/exec", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ script: scriptName }),
+      });
     } catch (err) {
-      console.error("Failed to run standup:", err);
-    } finally {
-      setRunningStandup(false);
+      console.error("Failed to run script:", err);
     }
   };
 
@@ -121,13 +131,22 @@ export default function DashboardPage() {
     ? formatRelativeTime(lastHeartbeat.ts)
     : undefined;
 
+  // Check if there are proposals
+  const hasProposals = proposals.trim().length > 0;
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">ClawdTM</h1>
-          <p className="text-sm text-zinc-400">Command Center</p>
+        <div className="flex items-center gap-3">
+          <span className="text-3xl">🦞</span>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold">ClawdTM</h1>
+              <AgentLevelBadge uptimeSeconds={uptime} />
+            </div>
+            <p className="text-sm text-zinc-400">Command Center</p>
+          </div>
         </div>
         <button
           onClick={refresh}
@@ -141,63 +160,51 @@ export default function DashboardPage() {
         </button>
       </header>
 
-      {/* Status Card */}
+      {/* Status Card - Collapsible */}
       <StatusCard
         connected={connected}
         uptime={uptimeStr}
         lastHeartbeat={heartbeatTime}
+        defaultCollapsed={false}
       />
+
+      {/* Proposals Banner (if any) */}
+      {hasProposals && (
+        <div className="bg-gradient-to-r from-orange-500/20 to-yellow-500/20 rounded-xl border border-orange-500/30 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Sparkles className="w-5 h-5 text-orange-400" />
+            <span className="font-medium text-orange-200">Agent has ideas!</span>
+          </div>
+          <p className="text-sm text-zinc-300 line-clamp-2">
+            {proposals.split("\n").find(l => l.trim() && !l.startsWith("#")) || "Check proposals..."}
+          </p>
+        </div>
+      )}
 
       {/* Soul Card */}
       <SoulCard content={soul} loading={soulLoading} />
 
-      {/* Cron Timeline */}
+      {/* Upcoming Jobs */}
       <CronTimeline jobs={cronJobs} loading={refreshing && cronJobs.length === 0} />
 
-      {/* Quick Actions */}
+      {/* Quick Actions - Favorites */}
       <section>
-        <h2 className="text-lg font-semibold mb-3">Quick Actions</h2>
-        <QuickActionsGrid>
-          <QuickAction
-            icon="🔄"
-            label="Refresh All"
-            sublabel="Reload data"
-            onClick={refresh}
-            loading={refreshing}
-          />
-          <QuickAction
-            icon="📊"
-            label="Run Standup"
-            sublabel="Daily standup"
-            onClick={handleRunStandup}
-            loading={runningStandup}
-            disabled={!cronJobs.some((j) => j.name.toLowerCase().includes("standup"))}
-          />
-          <QuickAction
-            icon="🔍"
-            label="Review Skills"
-            sublabel="Check moderation"
-            onClick={async () => {
-              try {
-                await fetch("/api/exec", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ script: "review_skills.sh", args: ["5"] }),
-                });
-              } catch (err) {
-                console.error("Failed to run script:", err);
-              }
-            }}
-          />
-          <QuickAction
-            icon="📝"
-            label="View Memory"
-            sublabel="Today's notes"
-            onClick={() => {
-              window.location.href = "/memory";
-            }}
-          />
-        </QuickActionsGrid>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold">Quick Actions</h2>
+          {favorites.length > 0 && (
+            <button
+              onClick={() => router.push("/actions")}
+              className="text-sm text-orange-400 hover:text-orange-300"
+            >
+              Manage
+            </button>
+          )}
+        </div>
+        <FavoritesGrid
+          favorites={favorites}
+          onRun={handleRunScript}
+          onManage={() => router.push("/actions")}
+        />
       </section>
     </div>
   );

@@ -53,9 +53,27 @@ export interface SkillStatusEntry {
   source: string;
   eligible: boolean;
   disabled: boolean;
+  blockedByAllowlist?: boolean;
+  always?: boolean;
+  requirements?: {
+    bins?: string[];
+    anyBins?: string[];
+    env?: string[];
+    config?: string[];
+    os?: string[];
+  };
+  missing?: {
+    bins?: string[];
+    anyBins?: string[];
+    env?: string[];
+    config?: string[];
+    os?: string[];
+  };
 }
 
 export interface SkillStatusReport {
+  workspaceDir?: string;
+  managedSkillsDir?: string;
   skills: SkillStatusEntry[];
 }
 
