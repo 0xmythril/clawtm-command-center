@@ -18,9 +18,9 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
   icons: {
     icon: [
-      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/logo-clawdTM-green.png", type: "image/png" },
     ],
-    apple: "/favicon.svg",
+    apple: "/logo-clawdTM-green.png",
   },
   appleWebApp: {
     capable: true,

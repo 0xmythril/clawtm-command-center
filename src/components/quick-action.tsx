@@ -30,14 +30,14 @@ export function QuickAction({
         "w-full min-h-[80px] rounded-xl border p-4 text-left transition-all btn-press",
         "flex flex-col justify-center",
         variant === "primary"
-          ? "bg-orange-500/10 border-orange-500/30 hover:bg-orange-500/20"
+          ? "bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500/20"
           : "bg-zinc-900 border-zinc-800 hover:bg-zinc-800/80",
         "disabled:opacity-50 disabled:cursor-not-allowed"
       )}
     >
       <div className="flex items-center gap-2">
         {loading ? (
-          <Loader2 className="w-5 h-5 animate-spin text-orange-500" />
+          <Loader2 className="w-5 h-5 animate-spin text-emerald-500" />
         ) : (
           icon && <span className="text-xl">{icon}</span>
         )}

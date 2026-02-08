@@ -9,6 +9,7 @@ const OPENCLAW_CREDENTIALS =
   process.env.OPENCLAW_CREDENTIALS || "/home/clawdbot/.openclaw/credentials";
 const OPENCLAW_ROOT = process.env.OPENCLAW_ROOT || "/home/clawdbot/.openclaw";
 const ADDRESS_BOOK_PATH = path.join(OPENCLAW_ROOT, "address-book.json");
+const GROUP_NICKNAMES_PATH = path.join(OPENCLAW_ROOT, "group-nicknames.json");
 
 interface AllowFromStore {
   version: number;
@@ -75,6 +76,26 @@ async function writeAddressBook(data: AddressBookData): Promise<void> {
   const tmpPath = `${ADDRESS_BOOK_PATH}.${randomBytes(8).toString("hex")}.tmp`;
   await fs.writeFile(tmpPath, JSON.stringify(data, null, 2), "utf-8");
   await fs.rename(tmpPath, ADDRESS_BOOK_PATH);
+}
+
+// ─── Group nicknames ──────────────────────────────────────────────────────
+type GroupNicknames = Record<string, string>; // key: "channel:groupId" -> displayName
+
+async function readGroupNicknames(): Promise<GroupNicknames> {
+  try {
+    const raw = await fs.readFile(GROUP_NICKNAMES_PATH, "utf-8");
+    return JSON.parse(raw) as GroupNicknames;
+  } catch {
+    return {};
+  }
+}
+
+async function writeGroupNicknames(data: GroupNicknames): Promise<void> {
+  const dir = path.dirname(GROUP_NICKNAMES_PATH);
+  await fs.mkdir(dir, { recursive: true });
+  const tmpPath = `${GROUP_NICKNAMES_PATH}.${randomBytes(8).toString("hex")}.tmp`;
+  await fs.writeFile(tmpPath, JSON.stringify(data, null, 2), "utf-8");
+  await fs.rename(tmpPath, GROUP_NICKNAMES_PATH);
 }
 
 function contactId(): string {
@@ -314,12 +335,12 @@ export async function GET(request: NextRequest) {
     }
 
     if (section === "groups") {
-      const groups = await getGroups();
+      const [groups, nicknames] = await Promise.all([getGroups(), readGroupNicknames()]);
       const raw = await fs.readFile(OPENCLAW_CONFIG, "utf-8");
       const config = JSON.parse(raw);
       const telegramGroups = (config.channels?.telegram?.groups as Record<string, unknown>) || {};
       const groupPolicy = config.channels?.telegram?.groupPolicy ?? "allowlist";
-      return NextResponse.json({ groups, groupPolicy, telegramGroups });
+      return NextResponse.json({ groups, groupPolicy, telegramGroups, nicknames });
     }
 
     if (section === "devices") {
@@ -621,6 +642,28 @@ export async function POST(request: NextRequest) {
       ab.suggestions.splice(idx, 1);
       await writeAddressBook(ab);
       return NextResponse.json({ ok: true });
+    }
+
+    // ─── Group nickname actions ──────────────────────────────────────────
+    if (action === "rename-group") {
+      const { channel: ch, groupId: gid, displayName: name } = body as {
+        channel?: string;
+        groupId?: string;
+        displayName?: string;
+      };
+      if (!ch || !gid) {
+        return NextResponse.json({ error: "channel and groupId required" }, { status: 400 });
+      }
+      const nicknames = await readGroupNicknames();
+      const key = `${ch}:${gid}`;
+      const displayName = typeof name === "string" ? name.trim() : "";
+      if (displayName) {
+        nicknames[key] = displayName;
+      } else {
+        delete nicknames[key];
+      }
+      await writeGroupNicknames(nicknames);
+      return NextResponse.json({ ok: true, nicknames });
     }
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });

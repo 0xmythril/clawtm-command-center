@@ -444,7 +444,7 @@ export default function ActionsPage() {
       {/* Header */}
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Zap className="w-6 h-6 text-orange-500" />
+          <Zap className="w-6 h-6 text-emerald-500" />
           <div>
             <h1 className="text-2xl font-bold">Actions</h1>
             <p className="text-sm text-zinc-400">
@@ -466,15 +466,15 @@ export default function ActionsPage() {
         <TabsList className="grid w-full grid-cols-3 bg-zinc-900">
           <TabsTrigger value="scheduled" className="data-[state=active]:bg-zinc-800 text-xs sm:text-sm px-1 sm:px-3">
             <Clock className="w-4 h-4 mr-1 sm:mr-2 shrink-0" />
-            <span className="truncate">Scheduled ({totalScheduledCount})</span>
+            <span className="truncate">Scheduled<span className="hidden sm:inline"> ({totalScheduledCount})</span></span>
           </TabsTrigger>
           <TabsTrigger value="manual" className="data-[state=active]:bg-zinc-800 text-xs sm:text-sm px-1 sm:px-3">
             <FileCode className="w-4 h-4 mr-1 sm:mr-2 shrink-0" />
-            <span className="truncate">Scripts ({scripts.length})</span>
+            <span className="truncate">Scripts<span className="hidden sm:inline"> ({scripts.length})</span></span>
           </TabsTrigger>
           <TabsTrigger value="log" className="data-[state=active]:bg-zinc-800 text-xs sm:text-sm px-1 sm:px-3">
             <ScrollText className="w-4 h-4 mr-1 sm:mr-2 shrink-0" />
-            <span className="truncate">Log ({actionLog.length})</span>
+            <span className="truncate">Log<span className="hidden sm:inline"> ({actionLog.length})</span></span>
           </TabsTrigger>
         </TabsList>
 
@@ -486,7 +486,7 @@ export default function ActionsPage() {
           <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <Clock className="w-5 h-5 text-orange-500" />
+                <Clock className="w-5 h-5 text-emerald-500" />
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">Next Wake</span>
@@ -509,7 +509,7 @@ export default function ActionsPage() {
                 <Button
                   size="sm"
                   onClick={() => setShowCreateCron(true)}
-                  className="h-8 px-3 bg-orange-500 hover:bg-orange-600 text-white"
+                  className="h-8 px-3 bg-emerald-500 hover:bg-emerald-600 text-white"
                 >
                   <Plus className="w-4 h-4 mr-1" />
                   New
@@ -535,8 +535,8 @@ export default function ActionsPage() {
               </>
             ) : cronJobs.length === 0 ? (
               <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-8 text-center">
-                <Clock className="w-12 h-12 text-zinc-700 mx-auto mb-3" />
-                <p className="text-zinc-400">No scheduled actions</p>
+                <Clock className="w-10 h-10 text-zinc-700 mx-auto mb-3" />
+                <p className="text-sm text-zinc-400 font-medium">No scheduled actions</p>
                 <p className="text-xs text-zinc-500 mt-1">
                   Tap <strong>New</strong> above to create one, or schedule a script from the Scripts tab.
                 </p>
@@ -572,7 +572,7 @@ export default function ActionsPage() {
                             <ChevronDown className="w-4 h-4 text-zinc-500" />
                           )}
                         </div>
-                        <div className="text-sm text-orange-400 mt-1">{schedule.human}</div>
+                        <div className="text-sm text-emerald-400 mt-1">{schedule.human}</div>
                         <div className="flex gap-4 mt-2 text-xs text-zinc-500">
                           <span>Next: <span className="text-zinc-400">{formatNextRun(job.state?.nextRunAtMs)}</span></span>
                           <span>Last: <span className="text-zinc-400">{formatLastRun(job.state?.lastRunAtMs)}</span></span>
@@ -600,7 +600,7 @@ export default function ActionsPage() {
                           variant="default"
                           onClick={() => handleRunCron(job.id)}
                           disabled={busyJobId === job.id}
-                          className="h-8 px-3 bg-orange-500 hover:bg-orange-600 text-white"
+                          className="h-8 px-3 bg-emerald-500 hover:bg-emerald-600 text-white"
                           title="Run now (one-off)"
                         >
                           {busyJobId === job.id ? <Loader2 className="w-4 h-4 animate-spin" /> : "Run"}
@@ -672,7 +672,7 @@ export default function ActionsPage() {
               <div className="flex items-center gap-2">
                 <Terminal className="w-4 h-4 text-zinc-500" />
                 <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                  System Crontab ({systemCronEntries.length})
+                  System Crontab<span className="hidden sm:inline"> ({systemCronEntries.length})</span>
                 </h3>
               </div>
               <div className="flex items-start gap-2 text-xs text-zinc-500 bg-zinc-900/50 rounded-lg p-3 border border-zinc-800/50">
@@ -697,7 +697,7 @@ export default function ActionsPage() {
                           System
                         </Badge>
                       </div>
-                      <div className="text-sm text-orange-400 mt-1">
+                      <div className="text-sm text-emerald-400 mt-1">
                         {humanizeCron(entry.expr)}
                       </div>
                       <code className="block text-xs text-zinc-500 mt-2 font-mono break-all bg-zinc-800/50 rounded px-2 py-1">
@@ -722,7 +722,7 @@ export default function ActionsPage() {
           <div className="flex items-start gap-2 text-xs text-zinc-500 bg-zinc-900/50 rounded-lg p-3 border border-zinc-800/50">
             <Info className="w-4 h-4 shrink-0 mt-0.5" />
             <span>
-              <Star className="w-3 h-3 inline text-orange-400" /> Pin to Dashboard ·{" "}
+              <Star className="w-3 h-3 inline text-emerald-400" /> Pin to Dashboard ·{" "}
               <CalendarClock className="w-3 h-3 inline text-sky-400" /> Schedule as cron job
             </span>
           </div>
@@ -737,8 +737,8 @@ export default function ActionsPage() {
               </>
             ) : scripts.length === 0 ? (
               <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-8 text-center">
-                <FileCode className="w-12 h-12 text-zinc-700 mx-auto mb-3" />
-                <p className="text-zinc-400">No scripts found</p>
+                <FileCode className="w-10 h-10 text-zinc-700 mx-auto mb-3" />
+                <p className="text-sm text-zinc-400 font-medium">No scripts found</p>
                 <p className="text-xs text-zinc-500 mt-1">Add .sh files to workspace/scripts/</p>
               </div>
             ) : (
@@ -750,7 +750,7 @@ export default function ActionsPage() {
                     key={script.name}
                     className={cn(
                       "bg-zinc-900 rounded-xl border p-3 sm:p-4 card-hover overflow-hidden",
-                      isPinned ? "border-orange-500/30" : "border-zinc-800"
+                      isPinned ? "border-emerald-500/30" : "border-zinc-800"
                     )}
                   >
                     {/* Top row: pin + info */}
@@ -760,8 +760,8 @@ export default function ActionsPage() {
                         className={cn(
                           "p-1.5 sm:p-2 rounded-lg transition-colors shrink-0",
                           isPinned
-                            ? "bg-orange-500/20 text-orange-400"
-                            : "bg-zinc-800 text-zinc-500 hover:text-orange-400"
+                            ? "bg-emerald-500/20 text-emerald-400"
+                            : "bg-zinc-800 text-zinc-500 hover:text-emerald-400"
                         )}
                       >
                         <Star className={cn("w-4 h-4", isPinned && "fill-current")} />
@@ -769,7 +769,7 @@ export default function ActionsPage() {
 
                       <div className="flex-1 min-w-0 overflow-hidden">
                         <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                          <FileCode className="w-4 h-4 text-orange-500 shrink-0" />
+                          <FileCode className="w-4 h-4 text-emerald-500 shrink-0" />
                           <h3 className="font-medium font-mono text-xs sm:text-sm truncate">{script.name}</h3>
                           {script.lineCount && (
                             <Badge variant="secondary" className="text-xs shrink-0 hidden sm:inline-flex">
@@ -777,7 +777,7 @@ export default function ActionsPage() {
                             </Badge>
                           )}
                           {isPinned && (
-                            <Badge className="text-xs bg-orange-500/20 text-orange-400 border-0 shrink-0">
+                            <Badge className="text-xs bg-emerald-500/20 text-emerald-400 border-0 shrink-0">
                               Pinned
                             </Badge>
                           )}
@@ -807,7 +807,7 @@ export default function ActionsPage() {
                         size="sm"
                         onClick={() => runScript(script.name)}
                         disabled={runningScript === script.name}
-                        className="h-8 px-3 bg-orange-500 hover:bg-orange-600 text-white text-xs"
+                        className="h-8 px-3 bg-emerald-500 hover:bg-emerald-600 text-white text-xs"
                       >
                         {runningScript === script.name ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
@@ -868,8 +868,8 @@ export default function ActionsPage() {
           <section className="space-y-2">
             {actionLog.length === 0 ? (
               <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-8 text-center">
-                <ScrollText className="w-12 h-12 text-zinc-700 mx-auto mb-3" />
-                <p className="text-zinc-400">No actions recorded yet</p>
+                <ScrollText className="w-10 h-10 text-zinc-700 mx-auto mb-3" />
+                <p className="text-sm text-zinc-400 font-medium">No actions recorded yet</p>
                 <p className="text-xs text-zinc-500 mt-1">
                   Run a script or trigger a cron job to see it here.
                 </p>
@@ -897,7 +897,7 @@ export default function ActionsPage() {
                         variant="secondary"
                         className={cn(
                           "text-xs",
-                          entry.type === "cron" ? "text-sky-400" : "text-orange-400"
+                          entry.type === "cron" ? "text-sky-400" : "text-emerald-400"
                         )}
                       >
                         {entry.type === "cron" ? "Cron" : "Script"}
@@ -952,8 +952,9 @@ export default function ActionsPage() {
       {/* Confirm Delete Modal */}
       {/* ═══════════════════════════════════════════════════════════ */}
       {confirmDeleteJob && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 rounded-xl border border-zinc-800 w-full max-w-sm p-6">
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-zinc-900 rounded-t-2xl sm:rounded-xl border border-zinc-800 w-full max-w-sm p-4 sm:p-5">
+            <div className="w-10 h-1 bg-zinc-700 rounded-full mx-auto mb-4 sm:hidden" />
             <h3 className="font-semibold text-lg mb-2">Delete Job</h3>
             <p className="text-sm text-zinc-400 mb-6">
               Are you sure you want to delete this cron job? This cannot be undone.
@@ -982,8 +983,9 @@ export default function ActionsPage() {
       {/* Confirm Delete Script Modal */}
       {/* ═══════════════════════════════════════════════════════════ */}
       {confirmDeleteScript && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 rounded-xl border border-zinc-800 w-full max-w-sm p-6">
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-zinc-900 rounded-t-2xl sm:rounded-xl border border-zinc-800 w-full max-w-sm p-4 sm:p-5">
+            <div className="w-10 h-1 bg-zinc-700 rounded-full mx-auto mb-4 sm:hidden" />
             <h3 className="font-semibold text-lg mb-2">Delete Script</h3>
             <p className="text-sm text-zinc-400 mb-2">
               Are you sure you want to delete{" "}
@@ -1019,8 +1021,9 @@ export default function ActionsPage() {
       {/* Script Result Modal */}
       {/* ═══════════════════════════════════════════════════════════ */}
       {result && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center p-4">
-          <div className="bg-zinc-900 rounded-xl border border-zinc-800 w-full max-w-lg max-h-[80vh] flex flex-col">
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-zinc-900 rounded-t-2xl sm:rounded-xl border border-zinc-800 w-full max-w-lg max-h-[80vh] flex flex-col">
+            <div className="w-10 h-1 bg-zinc-700 rounded-full mx-auto mt-2 sm:hidden" />
             <div className="flex items-center justify-between p-4 border-b border-zinc-800">
               <div className="flex items-center gap-2 min-w-0">
                 {result.result.success ? (
@@ -1124,8 +1127,9 @@ function CreateCronModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center p-4">
-      <div className="bg-zinc-900 rounded-xl border border-zinc-800 w-full max-w-lg max-h-[85vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-zinc-900 rounded-t-2xl sm:rounded-xl border border-zinc-800 w-full max-w-lg max-h-[85vh] flex flex-col">
+        <div className="w-10 h-1 bg-zinc-700 rounded-full mx-auto mt-2 sm:hidden" />
         <div className="flex items-center justify-between p-4 border-b border-zinc-800">
           <h3 className="font-semibold text-lg">New Scheduled Job</h3>
           <button onClick={onClose} className="p-1 rounded hover:bg-zinc-800 transition-colors">
@@ -1142,7 +1146,7 @@ function CreateCronModal({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Daily Report"
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
             />
           </div>
 
@@ -1155,7 +1159,7 @@ function CreateCronModal({
                 className={cn(
                   "px-3 py-1.5 rounded-lg text-sm transition-colors",
                   scheduleKind === "cron"
-                    ? "bg-orange-500 text-white"
+                    ? "bg-emerald-500 text-white"
                     : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
                 )}
               >
@@ -1166,7 +1170,7 @@ function CreateCronModal({
                 className={cn(
                   "px-3 py-1.5 rounded-lg text-sm transition-colors",
                   scheduleKind === "every"
-                    ? "bg-orange-500 text-white"
+                    ? "bg-emerald-500 text-white"
                     : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
                 )}
               >
@@ -1181,7 +1185,7 @@ function CreateCronModal({
                   value={cronExpr}
                   onChange={(e) => setCronExpr(e.target.value)}
                   placeholder="0 0 * * *"
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm font-mono text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm font-mono text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                 />
                 <p className="text-xs text-zinc-500 mt-1">
                   {humanizeCron(cronExpr)}
@@ -1195,7 +1199,7 @@ function CreateCronModal({
                   onChange={(e) => setEveryMinutes(e.target.value)}
                   min="1"
                   placeholder="30"
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                 />
                 <p className="text-xs text-zinc-500 mt-1">
                   Every {everyMinutes || "?"} minutes
@@ -1214,7 +1218,7 @@ function CreateCronModal({
               onChange={(e) => setPayloadText(e.target.value)}
               placeholder="What should the agent do when this job runs?"
               rows={4}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 resize-none"
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 resize-none"
             />
           </div>
         </div>
@@ -1224,7 +1228,7 @@ function CreateCronModal({
             Cancel
           </Button>
           <Button
-            className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
+            className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white"
             onClick={handleSubmit}
             disabled={!name.trim() || !payloadText.trim() || creating}
           >
@@ -1277,8 +1281,9 @@ function ScheduleScriptModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center p-4">
-      <div className="bg-zinc-900 rounded-xl border border-zinc-800 w-full max-w-sm">
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-zinc-900 rounded-t-2xl sm:rounded-xl border border-zinc-800 w-full max-w-sm">
+        <div className="w-10 h-1 bg-zinc-700 rounded-full mx-auto mt-2 sm:hidden" />
         <div className="flex items-center justify-between p-4 border-b border-zinc-800">
           <div>
             <h3 className="font-semibold">Schedule Script</h3>
@@ -1292,7 +1297,7 @@ function ScheduleScriptModal({
         <div className="p-4 space-y-2">
           {scheduling ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-6 h-6 text-orange-500 animate-spin" />
+              <Loader2 className="w-6 h-6 text-emerald-500 animate-spin" />
             </div>
           ) : customMode ? (
             <div className="space-y-3">
@@ -1303,7 +1308,7 @@ function ScheduleScriptModal({
                   value={cronExpr}
                   onChange={(e) => setCronExpr(e.target.value)}
                   placeholder="0 0 * * *"
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm font-mono text-zinc-100 focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm font-mono text-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                 />
                 <p className="text-xs text-zinc-500 mt-1">{humanizeCron(cronExpr)}</p>
               </div>
@@ -1312,7 +1317,7 @@ function ScheduleScriptModal({
                   Back
                 </Button>
                 <Button
-                  className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
+                  className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white"
                   onClick={handleCustom}
                   disabled={!cronExpr.trim()}
                 >

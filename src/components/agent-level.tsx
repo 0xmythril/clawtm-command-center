@@ -69,7 +69,7 @@ export function AgentLevel({ uptimeSeconds, className }: AgentLevelProps) {
     <div className={cn("flex items-center gap-2", className)}>
       {/* Level Badge */}
       <div className="relative">
-        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-orange-500/20">
+        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-emerald-500/20">
           {level}
         </div>
         {/* Progress ring */}
@@ -99,7 +99,7 @@ export function AgentLevel({ uptimeSeconds, className }: AgentLevelProps) {
       {/* Title */}
       <div className="hidden sm:block">
         <div className="text-xs text-zinc-400">Level {level}</div>
-        <div className="text-sm font-medium text-orange-400">{title}</div>
+        <div className="text-sm font-medium text-emerald-400">{title}</div>
       </div>
     </div>
   );
@@ -118,12 +118,12 @@ export function AgentLevelBadge({ uptimeSeconds, className }: AgentLevelProps) {
     <div
       className={cn(
         "flex items-center gap-1.5 px-2 py-1 rounded-full",
-        "bg-gradient-to-r from-orange-500/20 to-yellow-500/20",
-        "border border-orange-500/30",
+        "bg-gradient-to-r from-emerald-500/20 to-yellow-500/20",
+        "border border-emerald-500/30",
         className
       )}
     >
-      <span className="text-orange-400 font-bold text-xs">Lv.{level}</span>
+      <span className="text-emerald-400 font-bold text-xs">Lv.{level}</span>
       <span className="text-zinc-400 text-xs hidden sm:inline">{title}</span>
     </div>
   );

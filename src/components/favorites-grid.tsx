@@ -43,11 +43,11 @@ export function FavoritesGrid({ favorites, onRun, onManage }: FavoritesGridProps
             "btn-press disabled:opacity-50"
           )}
         >
-          <div className="w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center shrink-0">
+          <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center shrink-0">
             {running === name ? (
-              <Loader2 className="w-5 h-5 text-orange-500 animate-spin" />
+              <Loader2 className="w-5 h-5 text-emerald-500 animate-spin" />
             ) : (
-              <Play className="w-5 h-5 text-orange-500" />
+              <Play className="w-5 h-5 text-emerald-500" />
             )}
           </div>
           <div className="text-left min-w-0">

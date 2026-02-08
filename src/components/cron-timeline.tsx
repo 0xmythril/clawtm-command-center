@@ -53,16 +53,16 @@ export function CronTimeline({ jobs, loading }: CronTimelineProps) {
 
   if (loading) {
     return (
-      <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-6">
-        <h3 className="font-semibold mb-4">Upcoming Jobs</h3>
+      <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 sm:p-5">
+        <h3 className="font-semibold mb-3">Upcoming Jobs</h3>
         <div className="h-16 skeleton-shimmer rounded-lg" />
       </div>
     );
   }
 
   return (
-    <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-6 card-hover">
-      <div className="flex items-center gap-2 mb-4">
+    <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 sm:p-5 card-hover">
+      <div className="flex items-center gap-2 mb-3">
         <h3 className="font-semibold">Upcoming Jobs</h3>
         <div className="group relative">
           <Info className="w-3.5 h-3.5 text-zinc-500 cursor-help" />
@@ -89,7 +89,7 @@ export function CronTimeline({ jobs, loading }: CronTimelineProps) {
                   {job.name}
                 </div>
                 <div className="flex items-center gap-2 mt-1">
-                  <Badge variant="secondary" className="text-xs bg-orange-500/20 text-orange-400 border-0">
+                  <Badge variant="secondary" className="text-xs bg-emerald-500/20 text-emerald-400 border-0">
                     {formatRelativeTime(job.state!.nextRunAtMs!)}
                   </Badge>
                   <span className="text-xs text-zinc-500">

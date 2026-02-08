@@ -100,6 +100,8 @@ export default function ContactsPage() {
   const [editingName, setEditingName] = useState<{ contactId: string; value: string } | null>(null);
   const [editingNotes, setEditingNotes] = useState<{ contactId: string; value: string } | null>(null);
   const [nameModalFor, setNameModalFor] = useState<{ channel: string; id: string } | null>(null);
+  const [groupNicknames, setGroupNicknames] = useState<Record<string, string>>({});
+  const [editingGroup, setEditingGroup] = useState<{ key: string; value: string } | null>(null);
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
@@ -116,6 +118,7 @@ export default function ContactsPage() {
       );
       setGroups(groupsData.groups || []);
       setGroupPolicy(groupsData.groupPolicy || "allowlist");
+      setGroupNicknames(groupsData.nicknames || {});
       setDevices(devicesRes);
     } catch (err) {
       console.error("Failed to refresh contacts:", err);
@@ -225,6 +228,25 @@ export default function ContactsPage() {
       await refresh();
     } catch (err) {
       console.error("Rename failed:", err);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleRenameGroup = async (channel: string, groupId: string, displayName: string) => {
+    const key = `${channel}:${groupId}`;
+    setBusy(`rename-group-${key}`);
+    try {
+      const res = await fetch("/api/contacts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "rename-group", channel, groupId, displayName }),
+      });
+      const data = await res.json();
+      if (data.nicknames) setGroupNicknames(data.nicknames);
+      setEditingGroup(null);
+    } catch (err) {
+      console.error("Rename group failed:", err);
     } finally {
       setBusy(null);
     }
@@ -386,15 +408,15 @@ export default function ContactsPage() {
         <TabsList className="grid w-full grid-cols-3 bg-zinc-900">
           <TabsTrigger value="people" className="data-[state=active]:bg-zinc-800 text-xs sm:text-sm px-1 sm:px-3">
             <Users className="w-4 h-4 mr-1 sm:mr-2 shrink-0" />
-            <span className="truncate">People ({peopleSection?.mergedContacts?.length ?? 0})</span>
+            <span className="truncate">People<span className="hidden sm:inline"> ({peopleSection?.mergedContacts?.length ?? 0})</span></span>
           </TabsTrigger>
           <TabsTrigger value="groups" className="data-[state=active]:bg-zinc-800 text-xs sm:text-sm px-1 sm:px-3">
             <MessageSquare className="w-4 h-4 mr-1 sm:mr-2 shrink-0" />
-            <span className="truncate">Groups ({groups.length})</span>
+            <span className="truncate">Groups<span className="hidden sm:inline"> ({groups.length})</span></span>
           </TabsTrigger>
           <TabsTrigger value="devices" className="data-[state=active]:bg-zinc-800 text-xs sm:text-sm px-1 sm:px-3">
             <Smartphone className="w-4 h-4 mr-1 sm:mr-2 shrink-0" />
-            <span className="truncate">Devices ({devices.paired.length})</span>
+            <span className="truncate">Devices<span className="hidden sm:inline"> ({devices.paired.length})</span></span>
           </TabsTrigger>
         </TabsList>
 
@@ -407,7 +429,7 @@ export default function ContactsPage() {
                 Object.entries(peopleSection.channelsPeople).map(([ch, data]) =>
                   (data.pairingRequests?.length ?? 0) > 0 ? (
                     <section key={ch}>
-                      <h3 className="text-sm font-medium text-orange-400 mb-2 flex items-center gap-2">
+                      <h3 className="text-sm font-medium text-emerald-400 mb-2 flex items-center gap-2">
                         Pending pairing requests ({channelLabel(ch)})
                         <Badge variant="secondary" className="text-xs">
                           {data.pairingRequests.length}
@@ -467,7 +489,7 @@ export default function ContactsPage() {
 
               {peopleSection?.addressBook?.suggestions?.length ? (
                 <section>
-                  <h3 className="text-sm font-medium text-orange-400 mb-2 flex items-center gap-2">
+                  <h3 className="text-sm font-medium text-emerald-400 mb-2 flex items-center gap-2">
                     <Sparkles className="w-4 h-4" />
                     Bot suggestions
                   </h3>
@@ -475,7 +497,7 @@ export default function ContactsPage() {
                     {peopleSection.addressBook.suggestions.map((sug) => (
                       <div
                         key={sug.id}
-                        className="bg-orange-500/10 rounded-xl border border-orange-500/30 p-3 sm:p-4 space-y-2"
+                        className="bg-emerald-500/10 rounded-xl border border-emerald-500/30 p-3 sm:p-4 space-y-2"
                       >
                         <p className="text-xs sm:text-sm text-zinc-300 break-words">
                           {sug.reason} — {channelLabel(sug.identityA.channel)} {sug.identityA.id} ↔ {channelLabel(sug.identityB.channel)} {sug.identityB.id}
@@ -515,7 +537,7 @@ export default function ContactsPage() {
               <section>
                 <h3 className="text-sm font-medium text-zinc-300 mb-2">Contacts</h3>
                 {!peopleSection?.mergedContacts?.length ? (
-                  <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-6 text-center text-zinc-400 text-sm">
+                  <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 sm:p-5 text-center text-zinc-400 text-sm">
                     No contacts yet. Approve a pairing request or add user IDs in config.
                   </div>
                 ) : (
@@ -582,81 +604,13 @@ export default function ContactsPage() {
                                   ))}
                                 </div>
                               </div>
-                              <div className="flex items-center gap-1 shrink-0">
-                                {entry.contactId && editingName?.contactId !== entry.contactId && (
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-8 w-8 p-0"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setEditingName({
-                                        contactId: entry.contactId!,
-                                        value: entry.displayName,
-                                      });
-                                    }}
-                                    disabled={busy !== null}
-                                  >
-                                    <Pencil className="w-4 h-4" />
-                                  </Button>
-                                )}
+                              <div className="flex items-center shrink-0">
                                 {isExpanded ? (
                                   <ChevronUp className="w-5 h-5 text-zinc-500" />
                                 ) : (
                                   <ChevronDown className="w-5 h-5 text-zinc-500" />
                                 )}
                               </div>
-                            </div>
-                            {/* Action buttons row */}
-                            <div className="flex items-center gap-2 mt-2 ml-7 sm:ml-9 flex-wrap">
-                              {!entry.fromAddressBook && entry.identities.length === 1 && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 text-xs px-2"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setNameModalFor({
-                                      channel: entry.identities[0].channel,
-                                      id: entry.identities[0].id,
-                                    });
-                                  }}
-                                  disabled={busy !== null}
-                                >
-                                  <Pencil className="w-3 h-3 mr-1" />
-                                  Add to book
-                                </Button>
-                              )}
-                              {entry.fromAddressBook && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 text-xs px-2"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setLinkModalFor(entry);
-                                  }}
-                                  disabled={busy !== null}
-                                >
-                                  <Link2 className="w-3 h-3 mr-1" />
-                                  Link
-                                </Button>
-                              )}
-                              {entry.identities[0] && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 text-xs px-2 text-red-400 border-red-500/30 hover:bg-red-500/10"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleBlockUser(entry.identities[0].id, entry.identities[0].channel);
-                                  }}
-                                  disabled={busy !== null}
-                                >
-                                  <Ban className="w-3 h-3 mr-1" />
-                                  Block
-                                </Button>
-                              )}
                             </div>
                           </div>
 
@@ -711,6 +665,39 @@ export default function ContactsPage() {
                                       Link another identity
                                     </Button>
                                   </div>
+                                  {/* Action buttons - moved here from collapsed view */}
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-8 text-xs"
+                                      onClick={() =>
+                                        setEditingName({
+                                          contactId: entry.contactId!,
+                                          value: entry.displayName,
+                                        })
+                                      }
+                                      disabled={busy !== null}
+                                    >
+                                      <Pencil className="w-3.5 h-3.5 mr-1" />
+                                      Rename
+                                    </Button>
+                                    {entry.identities[0] && (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-8 text-xs text-red-400 border-red-500/30 hover:bg-red-500/10"
+                                        onClick={() =>
+                                          handleBlockUser(entry.identities[0].id, entry.identities[0].channel)
+                                        }
+                                        disabled={busy !== null}
+                                      >
+                                        <Ban className="w-3.5 h-3.5 mr-1" />
+                                        Block
+                                      </Button>
+                                    )}
+                                  </div>
+
                                   <div>
                                     <div className="text-xs font-medium text-zinc-500 mb-1">Notes</div>
                                     {editingNotes?.contactId === entry.contactId ? (
@@ -801,30 +788,74 @@ export default function ContactsPage() {
                 </span>
               </div>
               {groups.length === 0 ? (
-                <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-6 text-center text-zinc-400 text-sm">
+                <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 sm:p-5 text-center text-zinc-400 text-sm">
                   No groups configured
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {groups.map((g) => (
-                    <div
-                      key={`${g.channel}-${g.groupId}`}
-                      className="bg-zinc-900 rounded-xl border border-zinc-800 p-4"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-xl">💬</span>
-                        <div>
-                          <div className="font-mono text-sm">{g.groupId}</div>
-                          <div className="text-xs text-zinc-500">
-                            {g.channel}
-                            {g.settings?.requireMention !== undefined && (
-                              <> · Require mention: {String(g.settings.requireMention)}</>
+                  {groups.map((g) => {
+                    const nickKey = `${g.channel}:${g.groupId}`;
+                    const nickname = groupNicknames[nickKey];
+                    const isEditing = editingGroup?.key === nickKey;
+                    return (
+                      <div
+                        key={`${g.channel}-${g.groupId}`}
+                        className="bg-zinc-900 rounded-xl border border-zinc-800 p-4"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-xl">💬</span>
+                          <div className="min-w-0 flex-1">
+                            {isEditing ? (
+                              <input
+                                type="text"
+                                value={editingGroup.value}
+                                onChange={(e) =>
+                                  setEditingGroup({ ...editingGroup, value: e.target.value })
+                                }
+                                onBlur={() => {
+                                  handleRenameGroup(g.channel, g.groupId, editingGroup.value);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    handleRenameGroup(g.channel, g.groupId, editingGroup.value);
+                                  }
+                                  if (e.key === "Escape") setEditingGroup(null);
+                                }}
+                                autoFocus
+                                className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-sm w-full max-w-[220px]"
+                              />
+                            ) : (
+                              <div className="font-medium text-sm truncate">
+                                {nickname || g.groupId}
+                                {nickname && (
+                                  <span className="text-zinc-600 font-mono text-xs ml-1.5">
+                                    {g.groupId}
+                                  </span>
+                                )}
+                              </div>
                             )}
+                            <div className="text-xs text-zinc-500">
+                              {g.channel}
+                              {g.settings?.requireMention !== undefined && (
+                                <> · Require mention: {String(g.settings.requireMention)}</>
+                              )}
+                            </div>
                           </div>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0 shrink-0"
+                            onClick={() =>
+                              setEditingGroup({ key: nickKey, value: nickname || "" })
+                            }
+                            disabled={busy !== null}
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </Button>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </>
@@ -838,7 +869,7 @@ export default function ContactsPage() {
             <>
               {devices.pending.length > 0 && (
                 <section>
-                  <h3 className="text-sm font-medium text-orange-400 mb-2 flex items-center gap-2">
+                  <h3 className="text-sm font-medium text-emerald-400 mb-2 flex items-center gap-2">
                     Pending devices
                     <Badge variant="secondary" className="text-xs">
                       {devices.pending.length}
@@ -892,7 +923,7 @@ export default function ContactsPage() {
               <section>
                 <h3 className="text-sm font-medium text-zinc-300 mb-2">Paired devices</h3>
                 {devices.paired.length === 0 ? (
-                  <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-6 text-center text-zinc-400 text-sm">
+                  <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 sm:p-5 text-center text-zinc-400 text-sm">
                     No paired devices
                   </div>
                 ) : (
@@ -986,8 +1017,9 @@ function NameContactModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center p-4">
-      <div className="bg-zinc-900 rounded-xl border border-zinc-800 w-full max-w-sm">
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-zinc-900 rounded-t-2xl sm:rounded-xl border border-zinc-800 w-full max-w-sm">
+        <div className="w-10 h-1 bg-zinc-700 rounded-full mx-auto mt-2 sm:hidden" />
         <div className="flex items-center justify-between p-4 border-b border-zinc-800">
           <h3 className="font-semibold text-lg">Add to Address Book</h3>
           <button onClick={onClose} className="p-1 rounded hover:bg-zinc-800 transition-colors">
@@ -1011,7 +1043,7 @@ function NameContactModal({
                 if (e.key === "Enter") handleSubmit();
                 if (e.key === "Escape") onClose();
               }}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
             />
           </div>
         </div>
@@ -1020,7 +1052,7 @@ function NameContactModal({
             Cancel
           </Button>
           <Button
-            className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
+            className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white"
             onClick={handleSubmit}
             disabled={!name.trim() || isBusy}
           >
@@ -1074,8 +1106,9 @@ function LinkIdentityModal({
     : candidates;
 
   return (
-    <div className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center p-4">
-      <div className="bg-zinc-900 rounded-xl border border-zinc-800 w-full max-w-lg max-h-[85vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-zinc-900 rounded-t-2xl sm:rounded-xl border border-zinc-800 w-full max-w-lg max-h-[85vh] flex flex-col">
+        <div className="w-10 h-1 bg-zinc-700 rounded-full mx-auto mt-2 sm:hidden" />
         <div className="flex items-center justify-between p-4 border-b border-zinc-800">
           <h3 className="font-semibold text-lg">Link identity to {contact.displayName}</h3>
           <button onClick={onClose} className="p-1 rounded hover:bg-zinc-800 transition-colors">
@@ -1088,7 +1121,7 @@ function LinkIdentityModal({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search by channel or ID..."
-            className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 mb-3"
+            className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 mb-3"
           />
         </div>
         <ScrollArea className="flex-1 max-h-[50vh] px-4 pb-4">

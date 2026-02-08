@@ -5,8 +5,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, Calendar, Brain, FileText, Info } from "lucide-react";
+import { RefreshCw, Calendar, Brain, FileText, Info, User, Flame } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { MarkdownContent } from "@/components/markdown-content";
 
 interface MemoryFile {
   name: string;
@@ -18,8 +19,10 @@ export default function MemoryPage() {
   const [intelligenceFiles, setIntelligenceFiles] = useState<MemoryFile[]>([]);
   const [longTermMemory, setLongTermMemory] = useState<string>("");
   const [userMd, setUserMd] = useState<string>("");
+  const [soulMd, setSoulMd] = useState<string>("");
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<"memory" | "intelligence">("memory");
+  const [coreSection, setCoreSection] = useState<"memory" | "user">("memory");
   const [fileContent, setFileContent] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [contentLoading, setContentLoading] = useState(false);
@@ -27,17 +30,19 @@ export default function MemoryPage() {
   const fetchFiles = async () => {
     setLoading(true);
     try {
-      const [memoryRes, intelligenceRes, longTermRes, userRes] = await Promise.all([
+      const [memoryRes, intelligenceRes, longTermRes, userRes, soulRes] = await Promise.all([
         fetch("/api/memory?type=memory"),
         fetch("/api/memory?type=intelligence"),
         fetch("/api/workspace?file=MEMORY.md"),
         fetch("/api/workspace?file=USER.md"),
+        fetch("/api/workspace?file=SOUL.md"),
       ]);
 
       const memoryData = await memoryRes.json();
       const intelligenceData = await intelligenceRes.json();
       const longTermData = await longTermRes.json();
       const userData = await userRes.json();
+      const soulData = await soulRes.json();
 
       const parseFiles = (files: string[]): MemoryFile[] =>
         files
@@ -51,6 +56,7 @@ export default function MemoryPage() {
       setIntelligenceFiles(parseFiles(intelligenceData.files || []));
       setLongTermMemory(longTermData.content || "");
       setUserMd(userData.content || "");
+      setSoulMd(soulData.content || "");
 
       // Auto-select today's file or most recent
       const today = new Date().toISOString().split("T")[0];
@@ -118,33 +124,6 @@ export default function MemoryPage() {
     }
   };
 
-  // Render markdown-ish content with proper line breaks
-  const renderContent = (content: string) => {
-    return content.split("\n").map((line, i) => {
-      if (line.startsWith("# ")) {
-        return <h1 key={i} className="text-xl font-bold text-zinc-100 mt-4 first:mt-0 mb-2">{line.slice(2)}</h1>;
-      }
-      if (line.startsWith("## ")) {
-        return <h2 key={i} className="text-lg font-semibold text-zinc-200 mt-3 mb-1">{line.slice(3)}</h2>;
-      }
-      if (line.startsWith("### ")) {
-        return <h3 key={i} className="text-base font-medium text-zinc-300 mt-2 mb-1">{line.slice(4)}</h3>;
-      }
-      if (line.startsWith("- ")) {
-        return (
-          <div key={i} className="flex gap-2 pl-2 py-0.5">
-            <span className="text-orange-500 shrink-0">•</span>
-            <span className="text-zinc-300 break-words">{line.slice(2)}</span>
-          </div>
-        );
-      }
-      if (line.trim() === "") {
-        return <div key={i} className="h-2" />;
-      }
-      return <p key={i} className="text-zinc-400 break-words py-0.5">{line}</p>;
-    });
-  };
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -167,7 +146,7 @@ export default function MemoryPage() {
 
       {/* Tabs */}
       <Tabs defaultValue="daily" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3 bg-zinc-900">
+        <TabsList className="grid w-full grid-cols-4 bg-zinc-900">
           <TabsTrigger value="daily" className="data-[state=active]:bg-zinc-800 text-xs sm:text-sm px-1 sm:px-3">
             <Calendar className="w-4 h-4 mr-1 sm:mr-2 shrink-0" />
             Daily
@@ -179,6 +158,10 @@ export default function MemoryPage() {
           <TabsTrigger value="longterm" className="data-[state=active]:bg-zinc-800 text-xs sm:text-sm px-1 sm:px-3">
             <FileText className="w-4 h-4 mr-1 sm:mr-2 shrink-0" />
             Core
+          </TabsTrigger>
+          <TabsTrigger value="soul" className="data-[state=active]:bg-zinc-800 text-xs sm:text-sm px-1 sm:px-3">
+            <Flame className="w-4 h-4 mr-1 sm:mr-2 shrink-0" />
+            Soul
           </TabsTrigger>
         </TabsList>
 
@@ -215,7 +198,7 @@ export default function MemoryPage() {
                     className={cn(
                       "px-4 py-2 rounded-lg text-sm transition-colors shrink-0",
                       selectedFile === file.name && selectedType === "memory"
-                        ? "bg-orange-500 text-white"
+                        ? "bg-emerald-500 text-white"
                         : "bg-zinc-900 border border-zinc-800 hover:bg-zinc-800"
                     )}
                   >
@@ -227,7 +210,7 @@ export default function MemoryPage() {
           </ScrollArea>
 
           {/* Content */}
-          <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 sm:p-6 overflow-hidden">
+          <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 sm:p-5 overflow-hidden">
             {contentLoading ? (
               <div className="space-y-2">
                 <Skeleton className="h-4 w-full skeleton-shimmer" />
@@ -235,9 +218,10 @@ export default function MemoryPage() {
                 <Skeleton className="h-4 w-5/6 skeleton-shimmer" />
               </div>
             ) : fileContent && selectedType === "memory" ? (
-              <div className="text-sm leading-relaxed overflow-x-hidden">
-                {renderContent(fileContent)}
-              </div>
+              <MarkdownContent
+                content={fileContent}
+                fileName={selectedFile || undefined}
+              />
             ) : (
               <p className="text-zinc-400 text-sm">Select a date to view notes</p>
             )}
@@ -272,7 +256,7 @@ export default function MemoryPage() {
                     className={cn(
                       "px-4 py-2 rounded-lg text-sm transition-colors shrink-0",
                       selectedFile === file.name && selectedType === "intelligence"
-                        ? "bg-orange-500 text-white"
+                        ? "bg-emerald-500 text-white"
                         : "bg-zinc-900 border border-zinc-800 hover:bg-zinc-800"
                     )}
                   >
@@ -283,16 +267,17 @@ export default function MemoryPage() {
             </div>
           </ScrollArea>
 
-          <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 sm:p-6 overflow-hidden">
+          <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 sm:p-5 overflow-hidden">
             {contentLoading ? (
               <div className="space-y-2">
                 <Skeleton className="h-4 w-full skeleton-shimmer" />
                 <Skeleton className="h-4 w-3/4 skeleton-shimmer" />
               </div>
             ) : fileContent && selectedType === "intelligence" ? (
-              <div className="text-sm leading-relaxed overflow-x-hidden">
-                {renderContent(fileContent)}
-              </div>
+              <MarkdownContent
+                content={fileContent}
+                fileName={selectedFile || undefined}
+              />
             ) : (
               <p className="text-zinc-400 text-sm">Select a date to view intelligence</p>
             )}
@@ -300,60 +285,72 @@ export default function MemoryPage() {
         </TabsContent>
 
         {/* Long-term Memory */}
-        <TabsContent value="longterm">
-          {/* Info Banner */}
-          <div className="flex items-start gap-2 text-xs text-zinc-500 bg-zinc-900/50 rounded-lg p-3 border border-zinc-800/50 mb-4">
-            <Info className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>
-              <strong className="text-zinc-400">Core Memory</strong> — Persistent knowledge and context 
-              that the agent carries across all conversations.
-            </span>
+        <TabsContent value="longterm" className="space-y-4">
+          {/* Toggle between MEMORY.md and USER.md */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setCoreSection("memory")}
+              className={cn(
+                "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
+                coreSection === "memory"
+                  ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                  : "bg-zinc-900 text-zinc-500 border border-zinc-800 hover:text-zinc-300"
+              )}
+            >
+              <FileText className="w-4 h-4" />
+              MEMORY.md
+            </button>
+            <button
+              onClick={() => setCoreSection("user")}
+              className={cn(
+                "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
+                coreSection === "user"
+                  ? "bg-sky-500/15 text-sky-400 border border-sky-500/30"
+                  : "bg-zinc-900 text-zinc-500 border border-zinc-800 hover:text-zinc-300"
+              )}
+            >
+              <User className="w-4 h-4" />
+              USER.md
+            </button>
           </div>
 
-          <div className="space-y-4">
-            {/* MEMORY.md */}
-            <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 sm:p-6 overflow-hidden">
-              <div className="flex items-center gap-2 mb-4">
-                <FileText className="w-5 h-5 text-orange-500" />
-                <h3 className="font-medium">MEMORY.md</h3>
-                <Badge variant="secondary">Core</Badge>
+          <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 sm:p-5 overflow-hidden">
+            {loading ? (
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-full skeleton-shimmer" />
+                <Skeleton className="h-4 w-3/4 skeleton-shimmer" />
+                <Skeleton className="h-4 w-5/6 skeleton-shimmer" />
               </div>
-              {loading ? (
-                <div className="space-y-2">
-                  <Skeleton className="h-4 w-full skeleton-shimmer" />
-                  <Skeleton className="h-4 w-3/4 skeleton-shimmer" />
-                  <Skeleton className="h-4 w-5/6 skeleton-shimmer" />
-                </div>
-              ) : longTermMemory ? (
-                <div className="text-sm leading-relaxed overflow-x-hidden">
-                  {renderContent(longTermMemory)}
-                </div>
+            ) : coreSection === "memory" ? (
+              longTermMemory ? (
+                <MarkdownContent content={longTermMemory} fileName="MEMORY.md" />
               ) : (
                 <p className="text-zinc-400 text-sm">No long-term memory configured</p>
-              )}
-            </div>
-
-            {/* USER.md */}
-            <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 sm:p-6 overflow-hidden">
-              <div className="flex items-center gap-2 mb-4">
-                <FileText className="w-5 h-5 text-sky-500" />
-                <h3 className="font-medium">USER.md</h3>
-                <Badge variant="secondary">User Profile</Badge>
-              </div>
-              {loading ? (
-                <div className="space-y-2">
-                  <Skeleton className="h-4 w-full skeleton-shimmer" />
-                  <Skeleton className="h-4 w-3/4 skeleton-shimmer" />
-                  <Skeleton className="h-4 w-5/6 skeleton-shimmer" />
-                </div>
-              ) : userMd ? (
-                <div className="text-sm leading-relaxed overflow-x-hidden">
-                  {renderContent(userMd)}
-                </div>
+              )
+            ) : (
+              userMd ? (
+                <MarkdownContent content={userMd} fileName="USER.md" />
               ) : (
                 <p className="text-zinc-400 text-sm">No user profile configured</p>
-              )}
-            </div>
+              )
+            )}
+          </div>
+        </TabsContent>
+
+        {/* Soul */}
+        <TabsContent value="soul" className="space-y-4">
+          <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 sm:p-5 overflow-hidden">
+            {loading ? (
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-full skeleton-shimmer" />
+                <Skeleton className="h-4 w-3/4 skeleton-shimmer" />
+                <Skeleton className="h-4 w-5/6 skeleton-shimmer" />
+              </div>
+            ) : soulMd ? (
+              <MarkdownContent content={soulMd} fileName="SOUL.md" />
+            ) : (
+              <p className="text-zinc-400 text-sm">No soul file configured</p>
+            )}
           </div>
         </TabsContent>
       </Tabs>

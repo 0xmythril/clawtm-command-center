@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { MarkdownContent } from "@/components/markdown-content";
 
 interface SoulCardProps {
   content?: string;
@@ -14,7 +15,7 @@ export function SoulCard({ content, loading }: SoulCardProps) {
   
   if (loading) {
     return (
-      <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-6">
+      <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 sm:p-5">
         <div className="flex items-center gap-2 mb-3">
           <span className="text-lg">🦞</span>
           <Skeleton className="h-5 w-20 skeleton-shimmer" />
@@ -30,30 +31,8 @@ export function SoulCard({ content, loading }: SoulCardProps) {
   const meaningfulLines = lines.filter(
     (line) => line.trim() && !line.startsWith("#") && !line.startsWith("_")
   );
-  const excerpt = meaningfulLines.slice(0, 2).join(" ").slice(0, 200);
-  const hasMore = content && content.length > 200;
-
-  // Format full content for expanded view
-  const formattedContent = content
-    ?.split("\n")
-    .map((line) => {
-      if (line.startsWith("# ")) {
-        return { type: "h1", text: line.slice(2) };
-      }
-      if (line.startsWith("## ")) {
-        return { type: "h2", text: line.slice(3) };
-      }
-      if (line.startsWith("### ")) {
-        return { type: "h3", text: line.slice(4) };
-      }
-      if (line.startsWith("- ")) {
-        return { type: "li", text: line.slice(2) };
-      }
-      if (line.trim() === "") {
-        return { type: "br", text: "" };
-      }
-      return { type: "p", text: line };
-    }) || [];
+  const excerpt = meaningfulLines.slice(0, 3).join(" ").slice(0, 280);
+  const hasMore = content && content.length > 280;
 
   const toggleExpanded = () => {
     if (hasMore) {
@@ -64,7 +43,7 @@ export function SoulCard({ content, loading }: SoulCardProps) {
   return (
     <div 
       onClick={toggleExpanded}
-      className={`bg-zinc-900 rounded-xl border border-zinc-800 p-6 card-hover ${hasMore ? 'cursor-pointer' : ''}`}
+      className={`bg-zinc-900 rounded-xl border border-zinc-800 p-4 sm:p-5 card-hover ${hasMore ? 'cursor-pointer' : ''}`}
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -84,32 +63,19 @@ export function SoulCard({ content, loading }: SoulCardProps) {
       
       {expanded ? (
         <div 
-          className="mt-4 space-y-2 text-sm text-zinc-300 leading-relaxed max-h-[60vh] overflow-y-auto"
-          onClick={(e) => e.stopPropagation()} // Allow scrolling without collapsing
+          className="mt-3"
+          onClick={(e) => e.stopPropagation()}
         >
-          {formattedContent.map((line, i) => {
-            if (line.type === "h1") {
-              return <h1 key={i} className="text-xl font-bold text-zinc-100 mt-4 first:mt-0">{line.text}</h1>;
-            }
-            if (line.type === "h2") {
-              return <h2 key={i} className="text-lg font-semibold text-zinc-200 mt-3">{line.text}</h2>;
-            }
-            if (line.type === "h3") {
-              return <h3 key={i} className="text-base font-medium text-zinc-300 mt-2">{line.text}</h3>;
-            }
-            if (line.type === "li") {
-              return <div key={i} className="flex gap-2 pl-2"><span className="text-orange-500">•</span><span>{line.text}</span></div>;
-            }
-            if (line.type === "br") {
-              return <div key={i} className="h-2" />;
-            }
-            return <p key={i} className="text-zinc-400">{line.text}</p>;
-          })}
+          <MarkdownContent
+            content={content || ""}
+            fileName="SOUL.md"
+            maxHeight="60vh"
+          />
         </div>
       ) : (
-        <p className="mt-3 text-sm text-zinc-400 leading-relaxed">
+        <p className="mt-2 text-sm text-zinc-400 leading-relaxed line-clamp-3">
           {excerpt || "No soul content available."}
-          {excerpt && excerpt.length >= 200 && "..."}
+          {excerpt && excerpt.length >= 280 && "..."}
         </p>
       )}
     </div>

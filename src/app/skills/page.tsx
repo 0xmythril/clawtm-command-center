@@ -267,7 +267,7 @@ export default function SkillsPage() {
       {/* Header */}
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Puzzle className="w-6 h-6 text-orange-500" />
+          <Puzzle className="w-6 h-6 text-emerald-500" />
           <div>
             <h1 className="text-2xl font-bold">Skills</h1>
             <p className="text-xs sm:text-sm text-zinc-400">
@@ -287,9 +287,9 @@ export default function SkillsPage() {
       {/* Tabs */}
       <Tabs defaultValue="installed" className="space-y-4">
         <TabsList className="grid w-full grid-cols-2 bg-zinc-900">
-          <TabsTrigger value="installed" className="data-[state=active]:bg-zinc-800">
-            <Puzzle className="w-4 h-4 mr-2" />
-            Installed ({skills.length})
+          <TabsTrigger value="installed" className="data-[state=active]:bg-zinc-800 text-xs sm:text-sm">
+            <Puzzle className="w-4 h-4 mr-1 sm:mr-2 shrink-0" />
+            Installed<span className="hidden sm:inline"> ({skills.length})</span>
           </TabsTrigger>
           <TabsTrigger
             value="browse"
@@ -312,7 +312,7 @@ export default function SkillsPage() {
               placeholder="Filter skills by name..."
               value={skillSearch}
               onChange={(e) => setSkillSearch(e.target.value)}
-              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500"
+              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500"
             />
           </div>
 
@@ -330,7 +330,7 @@ export default function SkillsPage() {
                 className={cn(
                   "px-3 py-1.5 rounded-lg text-xs transition-colors border",
                   skillFilter === chip.key
-                    ? "bg-orange-500/15 text-orange-400 border-orange-500/30"
+                    ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
                     : "bg-zinc-900 text-zinc-500 border-zinc-800 hover:text-zinc-300"
                 )}
               >
@@ -349,8 +349,8 @@ export default function SkillsPage() {
               </>
             ) : filteredSkills.length === 0 ? (
               <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-8 text-center">
-                <Puzzle className="w-12 h-12 text-zinc-700 mx-auto mb-3" />
-                <p className="text-zinc-400">
+                <Puzzle className="w-10 h-10 text-zinc-700 mx-auto mb-3" />
+                <p className="text-sm text-zinc-400 font-medium">
                   {skillSearch
                     ? `No skills matching "${skillSearch}"`
                     : "No skills in this category"}
@@ -358,7 +358,7 @@ export default function SkillsPage() {
                 {skillSearch && (
                   <button
                     onClick={() => setSkillSearch("")}
-                    className="text-xs text-orange-400 hover:text-orange-300 mt-2"
+                    className="text-xs text-emerald-400 hover:text-emerald-300 mt-2"
                   >
                     Clear search
                   </button>
@@ -404,13 +404,13 @@ export default function SkillsPage() {
                 onKeyDown={(e) => {
                   if (e.key === "Enter") searchStore(searchQuery || undefined, sortBy, safeOnly);
                 }}
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-4 py-3 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500"
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-4 py-3 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500"
               />
             </div>
             <Button
               onClick={() => searchStore(searchQuery || undefined, sortBy, safeOnly)}
               disabled={storeLoading}
-              className="bg-orange-500 hover:bg-orange-600 text-white px-4"
+              className="bg-emerald-500 hover:bg-emerald-600 text-white px-4"
             >
               {storeLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Search"}
             </Button>
@@ -429,7 +429,7 @@ export default function SkillsPage() {
                     setSortBy(newSort);
                     searchStore(searchQuery || undefined, newSort, safeOnly);
                   }}
-                  className="bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1.5 text-xs text-zinc-300 focus:outline-none focus:ring-1 focus:ring-orange-500/50"
+                  className="bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1.5 text-xs text-zinc-300 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                 >
                   {SORT_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>
@@ -476,7 +476,7 @@ export default function SkillsPage() {
                   href="https://clawdtm.com"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-orange-400 hover:text-orange-300"
+                  className="text-emerald-400 hover:text-emerald-300"
                 >
                   clawdtm.com
                 </a>
@@ -513,8 +513,8 @@ export default function SkillsPage() {
             ) : !storeSearched ? (
               /* ── Getting started / discovery view ── */
               <div className="space-y-4">
-                <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-6 text-center">
-                  <Puzzle className="w-12 h-12 text-orange-500/60 mx-auto mb-3" />
+                <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 sm:p-5 text-center">
+                  <Puzzle className="w-10 h-10 text-emerald-500/60 mx-auto mb-3" />
                   <h3 className="font-semibold text-lg mb-1">Discover Skills</h3>
                   <p className="text-sm text-zinc-400 max-w-md mx-auto">
                     Search the ClawdTM skill store to find new capabilities for your agent.
@@ -553,21 +553,21 @@ export default function SkillsPage() {
                   <h4 className="text-xs font-medium text-zinc-400 uppercase tracking-wider">How it works</h4>
                   <div className="grid gap-3 text-sm">
                     <div className="flex items-start gap-3">
-                      <div className="w-6 h-6 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center text-xs font-bold shrink-0">1</div>
+                      <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs font-bold shrink-0">1</div>
                       <div>
                         <span className="text-zinc-300 font-medium">Search</span>
                         <span className="text-zinc-500"> — find skills by keyword or browse popular ones</span>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
-                      <div className="w-6 h-6 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center text-xs font-bold shrink-0">2</div>
+                      <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs font-bold shrink-0">2</div>
                       <div>
                         <span className="text-zinc-300 font-medium">Review</span>
                         <span className="text-zinc-500"> — check the security score, flags, and community ratings</span>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
-                      <div className="w-6 h-6 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center text-xs font-bold shrink-0">3</div>
+                      <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs font-bold shrink-0">3</div>
                       <div>
                         <span className="text-zinc-300 font-medium">Install</span>
                         <span className="text-zinc-500"> — one click to add the skill to your agent</span>
@@ -578,8 +578,8 @@ export default function SkillsPage() {
               </div>
             ) : storeSkills.length === 0 ? (
               <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-8 text-center">
-                <Search className="w-12 h-12 text-zinc-700 mx-auto mb-3" />
-                <p className="text-zinc-400">No skills found</p>
+                <Search className="w-10 h-10 text-zinc-700 mx-auto mb-3" />
+                <p className="text-sm text-zinc-400 font-medium">No skills found</p>
                 <p className="text-xs text-zinc-500 mt-1">
                   Try a different search{safeOnly ? " or disable the safe-only filter" : ""}
                 </p>
@@ -652,7 +652,7 @@ export default function SkillsPage() {
                               handleInstallClick(skill);
                             }}
                             disabled={installingSkill === skill.slug}
-                            className="h-8 px-3 bg-orange-500 hover:bg-orange-600 text-white"
+                            className="h-8 px-3 bg-emerald-500 hover:bg-emerald-600 text-white"
                           >
                             {installingSkill === skill.slug ? (
                               <Loader2 className="w-4 h-4 animate-spin" />
@@ -751,7 +751,7 @@ export default function SkillsPage() {
                               href={skill.clawdtm_url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-orange-400 hover:text-orange-300 flex items-center gap-1"
+                              className="text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
                             >
                               View on ClawdTM <ExternalLink className="w-3 h-3" />
                             </a>
@@ -781,8 +781,9 @@ export default function SkillsPage() {
 
       {/* Confirm Uninstall Modal */}
       {confirmUninstall && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 rounded-xl border border-zinc-800 w-full max-w-sm p-6">
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-zinc-900 rounded-t-2xl sm:rounded-xl border border-zinc-800 w-full max-w-sm p-4 sm:p-5">
+            <div className="w-10 h-1 bg-zinc-700 rounded-full mx-auto mb-4 sm:hidden" />
             <h3 className="font-semibold text-lg mb-2">Uninstall Skill</h3>
             <p className="text-sm text-zinc-400 mb-6">
               Are you sure you want to uninstall{" "}
@@ -840,8 +841,9 @@ function InstallConfirmModal({
   const needsAcknowledge = isHighRisk || isUnscanned;
 
   return (
-    <div className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center p-4">
-      <div className="bg-zinc-900 rounded-xl border border-zinc-800 w-full max-w-md max-h-[85vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-zinc-900 rounded-t-2xl sm:rounded-xl border border-zinc-800 w-full max-w-md max-h-[85vh] flex flex-col">
+        <div className="w-10 h-1 bg-zinc-700 rounded-full mx-auto mt-2 sm:hidden" />
         <div className="flex items-center justify-between p-4 border-b border-zinc-800">
           <div className="flex items-center gap-2">
             {isHighRisk ? (
@@ -932,7 +934,7 @@ function InstallConfirmModal({
                 type="checkbox"
                 checked={accepted}
                 onChange={(e) => setAccepted(e.target.checked)}
-                className="mt-1 rounded border-zinc-600 bg-zinc-800 text-orange-500 focus:ring-orange-500/50"
+                className="mt-1 rounded border-zinc-600 bg-zinc-800 text-emerald-500 focus:ring-emerald-500/50"
               />
               <span className="text-xs text-zinc-400">
                 I understand the risks and want to install this skill anyway
@@ -950,7 +952,7 @@ function InstallConfirmModal({
               "flex-1 text-white",
               isHighRisk
                 ? "bg-red-500 hover:bg-red-600"
-                : "bg-orange-500 hover:bg-orange-600"
+                : "bg-emerald-500 hover:bg-emerald-600"
             )}
             onClick={() => onConfirm(needsAcknowledge)}
             disabled={installing || (needsAcknowledge && !accepted)}
@@ -1001,40 +1003,34 @@ function InstalledSkillCard({
   return (
     <div
       className={cn(
-        "bg-zinc-900 rounded-xl border p-4 transition-all",
+        "bg-zinc-900 rounded-xl border transition-all",
+        expanded ? "p-4" : "px-3 py-2.5",
         skill.disabled ? "border-zinc-800/50 opacity-60" : "border-zinc-800"
       )}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div
-          className="flex items-start gap-3 min-w-0 flex-1 cursor-pointer"
-          onClick={onToggleExpand}
-        >
-          <span className="text-xl">{skill.emoji || "🔧"}</span>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="font-medium">{skill.name}</h3>
-              {skill.eligible && !skill.disabled ? (
-                <Badge className="text-xs bg-green-500/20 text-green-400 border-0">Active</Badge>
-              ) : skill.disabled ? (
-                <Badge variant="destructive" className="text-xs">Disabled</Badge>
-              ) : (
-                <Badge variant="secondary" className="text-xs">Unavailable</Badge>
-              )}
-              {skill.always && (
-                <Badge variant="outline" className="text-xs">Always</Badge>
-              )}
-              {isBuiltin && (
-                <Badge variant="outline" className="text-xs text-zinc-500">Builtin</Badge>
-              )}
-            </div>
-            <p className={cn("text-sm text-zinc-400 mt-1", !expanded && "line-clamp-1")}>
-              {skill.description}
-            </p>
-          </div>
+      {/* Compact single-line row */}
+      <div
+        className="flex items-center justify-between gap-2 cursor-pointer"
+        onClick={onToggleExpand}
+      >
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <span className="text-base shrink-0">{skill.emoji || "🔧"}</span>
+          <span className="font-medium text-sm truncate">{skill.name}</span>
+          {hasMissing && (
+            <span className="w-2 h-2 rounded-full bg-yellow-500 shrink-0" title="Missing dependencies" />
+          )}
+          {!hasMissing && skill.eligible && !skill.disabled && (
+            <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+          )}
+          {skill.disabled && (
+            <span className="w-2 h-2 rounded-full bg-zinc-600 shrink-0" />
+          )}
+          {isBuiltin && (
+            <span className="text-[10px] text-zinc-600">builtin</span>
+          )}
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -1042,7 +1038,7 @@ function InstalledSkillCard({
             }}
             disabled={busy}
             className={cn(
-              "p-2 rounded-lg transition-colors",
+              "p-1.5 rounded-lg transition-colors",
               skill.disabled
                 ? "text-zinc-500 hover:text-green-400 hover:bg-green-500/10"
                 : "text-green-400 hover:text-zinc-500 hover:bg-zinc-800"
@@ -1050,18 +1046,17 @@ function InstalledSkillCard({
             title={skill.disabled ? "Enable skill" : "Disable skill"}
           >
             {busy ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
+              <Loader2 className="w-4 h-4 animate-spin" />
             ) : skill.disabled ? (
-              <ToggleLeft className="w-5 h-5" />
+              <ToggleLeft className="w-4 h-4" />
             ) : (
-              <ToggleRight className="w-5 h-5" />
+              <ToggleRight className="w-4 h-4" />
             )}
           </button>
-
           {expanded ? (
-            <ChevronUp className="w-5 h-5 text-zinc-500 cursor-pointer" onClick={onToggleExpand} />
+            <ChevronUp className="w-4 h-4 text-zinc-500" />
           ) : (
-            <ChevronDown className="w-5 h-5 text-zinc-500 cursor-pointer" onClick={onToggleExpand} />
+            <ChevronDown className="w-4 h-4 text-zinc-500" />
           )}
         </div>
       </div>

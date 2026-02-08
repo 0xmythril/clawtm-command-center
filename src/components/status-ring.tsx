@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Heart, ChevronDown, ChevronUp, Wifi, WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { MarkdownContent } from "@/components/markdown-content";
 
 interface StatusRingProps {
   connected: boolean;
@@ -44,113 +45,119 @@ export function StatusCard({
 
   const toggleCollapsed = () => setCollapsed(!collapsed);
 
-  // Collapsed view - just icons and status
+  // Brief summary for collapsed view
+  const heartbeatSummary = heartbeatText
+    ? (() => {
+        const lines = heartbeatText.split("\n").filter((l) => l.trim());
+        const items = lines.filter((l) => l.startsWith("- ") || l.startsWith("## ") || l.startsWith("### "));
+        if (items.length > 0) return `${items.length} items`;
+        return "View details";
+      })()
+    : null;
+
+  // Collapsed view - compact inline
   if (collapsed) {
     return (
       <button
         onClick={toggleCollapsed}
-        className="w-full bg-zinc-900 rounded-xl border border-zinc-800 p-4 card-hover flex items-center justify-between cursor-pointer"
+        className="w-full bg-zinc-900 rounded-xl border border-zinc-800 p-4 sm:p-5 card-hover flex items-center justify-between cursor-pointer"
       >
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
           {/* Connection status */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             {connected ? (
-              <Wifi className="w-5 h-5 text-green-500" />
+              <Wifi className="w-4 h-4 text-green-500" />
             ) : (
-              <WifiOff className="w-5 h-5 text-red-500" />
+              <WifiOff className="w-4 h-4 text-red-500" />
             )}
             <StatusRing connected={connected} />
           </div>
           
           {/* Heartbeat */}
-          <div className="flex items-center gap-2 text-sm text-zinc-400">
+          <div className="flex items-center gap-1.5 text-sm text-zinc-400 shrink-0">
             <Heart className={cn(
-              "w-4 h-4",
+              "w-3.5 h-3.5",
               lastHeartbeat && !lastHeartbeat.includes("d") 
                 ? "text-red-400 animate-pulse" 
                 : "text-zinc-600"
             )} />
-            <span>{lastHeartbeat || "—"}</span>
+            <span className="text-xs">{lastHeartbeat || "—"}</span>
           </div>
           
           {/* Uptime badge */}
           {uptime && (
-            <span className="text-xs bg-zinc-800 px-2 py-1 rounded-full text-zinc-400">
+            <span className="text-xs bg-zinc-800 px-2 py-0.5 rounded-full text-zinc-500 shrink-0">
               {uptime}
+            </span>
+          )}
+
+          {/* Heartbeat summary */}
+          {heartbeatSummary && (
+            <span className="text-xs text-zinc-600 truncate hidden sm:inline">
+              · {heartbeatSummary}
             </span>
           )}
         </div>
         
-        <ChevronDown className="w-5 h-5 text-zinc-500" />
+        <ChevronDown className="w-4 h-4 text-zinc-500 shrink-0 ml-2" />
       </button>
     );
   }
 
-  // Expanded view - entire card is clickable
+  // Expanded view
   return (
-    <div 
-      onClick={toggleCollapsed}
-      className="bg-zinc-900 rounded-xl border border-zinc-800 p-6 card-hover cursor-pointer"
-    >
-      <div className="flex items-center justify-between mb-4">
+    <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 sm:p-5">
+      <div 
+        onClick={toggleCollapsed}
+        className="flex items-center justify-between cursor-pointer"
+      >
         <div className="flex items-center gap-3">
           {connected ? (
-            <Wifi className="w-5 h-5 text-green-500" />
+            <Wifi className="w-4 h-4 text-green-500" />
           ) : (
-            <WifiOff className="w-5 h-5 text-red-500" />
+            <WifiOff className="w-4 h-4 text-red-500" />
           )}
           <StatusRing connected={connected} />
-          <span className="font-medium">
+          <span className="font-medium text-sm">
             {connected ? "Connected" : "Disconnected"}
           </span>
+          {uptime && (
+            <span className="text-xs bg-zinc-800 px-2 py-0.5 rounded-full text-zinc-500">
+              {uptime}
+            </span>
+          )}
         </div>
-        <ChevronUp className="w-5 h-5 text-zinc-500" />
+        <ChevronUp className="w-4 h-4 text-zinc-500" />
       </div>
       
-      <div className="space-y-3 text-sm">
-        {/* Uptime */}
-        <div className="flex justify-between items-center">
-          <span className="text-zinc-400">Uptime</span>
-          <span className="font-mono text-zinc-200">{uptime || "—"}</span>
-        </div>
-        
+      <div className="mt-3 space-y-2 text-sm">
         {/* Heartbeat with icon */}
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-2 text-zinc-400">
             <Heart className={cn(
-              "w-4 h-4",
+              "w-3.5 h-3.5",
               lastHeartbeat && !lastHeartbeat.includes("d") 
                 ? "text-red-400 animate-pulse" 
                 : "text-zinc-600"
             )} />
-            <span>Last heartbeat</span>
+            <span className="text-xs">Last heartbeat</span>
           </div>
-          <span className="font-mono text-zinc-200">{lastHeartbeat || "—"}</span>
+          <span className="font-mono text-xs text-zinc-300">{lastHeartbeat || "—"}</span>
         </div>
 
-        {/* Heartbeat instructions/text OR heartbeat details */}
+        {/* Heartbeat instructions/text */}
         {heartbeatText ? (
-          <div className="pt-2 border-t border-zinc-800">
-            <div className="flex items-start gap-2 mb-1">
-              <span className="text-zinc-400 text-xs">
-                {heartbeatSource ? "Instructions" : "Daily Tasks"}
-              </span>
-              {heartbeatSource && (
-                <span className="text-xs bg-zinc-800 px-2 py-0.5 rounded text-zinc-500">
-                  {heartbeatSource}
-                </span>
-              )}
-            </div>
-            <div className="text-xs text-zinc-300 leading-relaxed whitespace-pre-wrap break-words max-h-48 overflow-y-auto">
-              {heartbeatText}
-            </div>
+          <div className="pt-2">
+            <MarkdownContent
+              content={heartbeatText}
+              fileName={heartbeatSource ? `via ${heartbeatSource}` : "HEARTBEAT.md"}
+              maxHeight="12rem"
+            />
           </div>
         ) : (
-          <div className="pt-2 border-t border-zinc-800">
-            <p className="text-xs text-zinc-500 italic">
-              No active instructions. Heartbeat is running on interval.
-            </p>
-          </div>
+          <p className="text-xs text-zinc-500 italic pt-2 border-t border-zinc-800">
+            No active instructions.
+          </p>
         )}
       </div>
     </div>
