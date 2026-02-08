@@ -464,17 +464,17 @@ export default function ActionsPage() {
       {/* Tabs */}
       <Tabs defaultValue="scheduled" className="space-y-4">
         <TabsList className="grid w-full grid-cols-3 bg-zinc-900">
-          <TabsTrigger value="scheduled" className="data-[state=active]:bg-zinc-800">
-            <Clock className="w-4 h-4 mr-2" />
-            Scheduled ({totalScheduledCount})
+          <TabsTrigger value="scheduled" className="data-[state=active]:bg-zinc-800 text-xs sm:text-sm px-1 sm:px-3">
+            <Clock className="w-4 h-4 mr-1 sm:mr-2 shrink-0" />
+            <span className="truncate">Scheduled ({totalScheduledCount})</span>
           </TabsTrigger>
-          <TabsTrigger value="manual" className="data-[state=active]:bg-zinc-800">
-            <FileCode className="w-4 h-4 mr-2" />
-            Scripts ({scripts.length})
+          <TabsTrigger value="manual" className="data-[state=active]:bg-zinc-800 text-xs sm:text-sm px-1 sm:px-3">
+            <FileCode className="w-4 h-4 mr-1 sm:mr-2 shrink-0" />
+            <span className="truncate">Scripts ({scripts.length})</span>
           </TabsTrigger>
-          <TabsTrigger value="log" className="data-[state=active]:bg-zinc-800">
-            <ScrollText className="w-4 h-4 mr-2" />
-            Log ({actionLog.length})
+          <TabsTrigger value="log" className="data-[state=active]:bg-zinc-800 text-xs sm:text-sm px-1 sm:px-3">
+            <ScrollText className="w-4 h-4 mr-1 sm:mr-2 shrink-0" />
+            <span className="truncate">Log ({actionLog.length})</span>
           </TabsTrigger>
         </TabsList>
 
@@ -555,13 +555,13 @@ export default function ActionsPage() {
                       job.enabled ? "border-zinc-800" : "border-zinc-800/50 opacity-60"
                     )}
                   >
-                    <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start justify-between gap-2 sm:gap-4">
                       <div
                         className="flex-1 min-w-0 cursor-pointer"
                         onClick={() => setExpandedJob(isExpanded ? null : job.id)}
                       >
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="font-medium">{job.name}</h3>
+                        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                          <h3 className="font-medium text-sm sm:text-base">{job.name}</h3>
                           <Badge variant={job.enabled ? "default" : "secondary"} className="text-xs">
                             {job.enabled ? "On" : "Off"}
                           </Badge>
@@ -749,16 +749,16 @@ export default function ActionsPage() {
                   <div
                     key={script.name}
                     className={cn(
-                      "bg-zinc-900 rounded-xl border p-4 card-hover overflow-hidden",
+                      "bg-zinc-900 rounded-xl border p-3 sm:p-4 card-hover overflow-hidden",
                       isPinned ? "border-orange-500/30" : "border-zinc-800"
                     )}
                   >
-                    <div className="flex items-start gap-3">
-                      {/* Pin button */}
+                    {/* Top row: pin + info */}
+                    <div className="flex items-start gap-2 sm:gap-3">
                       <button
                         onClick={() => toggleFavorite(script.name)}
                         className={cn(
-                          "p-2 rounded-lg transition-colors shrink-0",
+                          "p-1.5 sm:p-2 rounded-lg transition-colors shrink-0",
                           isPinned
                             ? "bg-orange-500/20 text-orange-400"
                             : "bg-zinc-800 text-zinc-500 hover:text-orange-400"
@@ -767,13 +767,12 @@ export default function ActionsPage() {
                         <Star className={cn("w-4 h-4", isPinned && "fill-current")} />
                       </button>
 
-                      {/* Script info */}
                       <div className="flex-1 min-w-0 overflow-hidden">
-                        <div className="flex items-center gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                           <FileCode className="w-4 h-4 text-orange-500 shrink-0" />
-                          <h3 className="font-medium font-mono text-sm truncate">{script.name}</h3>
+                          <h3 className="font-medium font-mono text-xs sm:text-sm truncate">{script.name}</h3>
                           {script.lineCount && (
-                            <Badge variant="secondary" className="text-xs shrink-0">
+                            <Badge variant="secondary" className="text-xs shrink-0 hidden sm:inline-flex">
                               {script.lineCount} lines
                             </Badge>
                           )}
@@ -783,61 +782,61 @@ export default function ActionsPage() {
                             </Badge>
                           )}
                           {script.source === "openclaw" && (
-                            <Badge variant="outline" className="text-xs shrink-0">
+                            <Badge variant="outline" className="text-xs shrink-0 hidden sm:inline-flex">
                               .openclaw
                             </Badge>
                           )}
                         </div>
-                        <p className="text-sm text-zinc-400 mt-2 leading-relaxed break-words line-clamp-3">
+                        <p className="text-xs sm:text-sm text-zinc-400 mt-1.5 sm:mt-2 leading-relaxed break-words line-clamp-2 sm:line-clamp-3">
                           {script.description}
                         </p>
-                        <div className="flex items-center gap-3 mt-2 text-xs text-zinc-500">
+                        <div className="flex items-center gap-3 mt-1.5 sm:mt-2 text-xs text-zinc-500">
                           {script.modifiedAt && <span>Modified {formatModifiedDate(script.modifiedAt)}</span>}
-                          <span className="text-zinc-600">
+                          <span className="text-zinc-600 truncate hidden sm:inline">
                             {script.source === "openclaw"
                               ? "~/.openclaw/scripts/"
                               : "~/.openclaw/workspace/scripts/"}
                           </span>
                         </div>
                       </div>
+                    </div>
 
-                      {/* Action buttons */}
-                      <div className="flex flex-col gap-2 shrink-0">
-                        <Button
-                          size="sm"
-                          onClick={() => runScript(script.name)}
-                          disabled={runningScript === script.name}
-                          className="h-9 px-4 bg-orange-500 hover:bg-orange-600 text-white"
-                        >
-                          {runningScript === script.name ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <>
-                              <Play className="w-4 h-4 mr-1" />
-                              Run
-                            </>
-                          )}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setScheduleScript(script.name)}
-                          className="h-8 px-3 text-sky-400 border-sky-500/30 hover:bg-sky-500/10"
-                          title="Schedule as cron job"
-                        >
-                          <CalendarClock className="w-4 h-4 mr-1" />
-                          Schedule
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setConfirmDeleteScript(script.name)}
-                          className="h-8 w-8 p-0 text-zinc-500 border-zinc-700 hover:text-red-400 hover:border-red-500/30 hover:bg-red-500/10"
-                          title="Delete script"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
+                    {/* Bottom row: action buttons */}
+                    <div className="flex items-center gap-2 mt-3 ml-8 sm:ml-11 flex-wrap">
+                      <Button
+                        size="sm"
+                        onClick={() => runScript(script.name)}
+                        disabled={runningScript === script.name}
+                        className="h-8 px-3 bg-orange-500 hover:bg-orange-600 text-white text-xs"
+                      >
+                        {runningScript === script.name ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <>
+                            <Play className="w-3.5 h-3.5 mr-1" />
+                            Run
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setScheduleScript(script.name)}
+                        className="h-8 px-2 sm:px-3 text-xs text-sky-400 border-sky-500/30 hover:bg-sky-500/10"
+                        title="Schedule as cron job"
+                      >
+                        <CalendarClock className="w-3.5 h-3.5 mr-1" />
+                        Schedule
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setConfirmDeleteScript(script.name)}
+                        className="h-8 w-8 p-0 text-zinc-500 border-zinc-700 hover:text-red-400 hover:border-red-500/30 hover:bg-red-500/10"
+                        title="Delete script"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
                     </div>
                   </div>
                 );

@@ -164,16 +164,16 @@ export default function MemoryPage() {
       {/* Tabs */}
       <Tabs defaultValue="daily" className="space-y-4">
         <TabsList className="grid w-full grid-cols-3 bg-zinc-900">
-          <TabsTrigger value="daily" className="data-[state=active]:bg-zinc-800">
-            <Calendar className="w-4 h-4 mr-2" />
+          <TabsTrigger value="daily" className="data-[state=active]:bg-zinc-800 text-xs sm:text-sm px-1 sm:px-3">
+            <Calendar className="w-4 h-4 mr-1 sm:mr-2 shrink-0" />
             Daily
           </TabsTrigger>
-          <TabsTrigger value="intelligence" className="data-[state=active]:bg-zinc-800">
-            <Brain className="w-4 h-4 mr-2" />
+          <TabsTrigger value="intelligence" className="data-[state=active]:bg-zinc-800 text-xs sm:text-sm px-1 sm:px-3">
+            <Brain className="w-4 h-4 mr-1 sm:mr-2 shrink-0" />
             Intel
           </TabsTrigger>
-          <TabsTrigger value="longterm" className="data-[state=active]:bg-zinc-800">
-            <FileText className="w-4 h-4 mr-2" />
+          <TabsTrigger value="longterm" className="data-[state=active]:bg-zinc-800 text-xs sm:text-sm px-1 sm:px-3">
+            <FileText className="w-4 h-4 mr-1 sm:mr-2 shrink-0" />
             Core
           </TabsTrigger>
         </TabsList>

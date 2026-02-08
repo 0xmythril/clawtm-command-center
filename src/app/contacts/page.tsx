@@ -358,18 +358,18 @@ export default function ContactsPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <header className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <Link
             href="/"
-            className="p-2 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 transition-colors"
+            className="p-2 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 transition-colors shrink-0"
           >
             <ArrowLeft className="w-5 h-5" />
           </Link>
-          <div>
-            <h1 className="text-2xl font-bold">Contacts & Access</h1>
-            <p className="text-sm text-zinc-400">
-              People, groups, and devices that can reach your bot
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold truncate">Contacts & Access</h1>
+            <p className="text-xs sm:text-sm text-zinc-400 truncate">
+              People, groups, and devices
             </p>
           </div>
         </div>
@@ -384,17 +384,17 @@ export default function ContactsPage() {
 
       <Tabs defaultValue="people" className="space-y-4">
         <TabsList className="grid w-full grid-cols-3 bg-zinc-900">
-          <TabsTrigger value="people" className="data-[state=active]:bg-zinc-800">
-            <Users className="w-4 h-4 mr-2" />
-            People ({peopleSection?.mergedContacts?.length ?? 0})
+          <TabsTrigger value="people" className="data-[state=active]:bg-zinc-800 text-xs sm:text-sm px-1 sm:px-3">
+            <Users className="w-4 h-4 mr-1 sm:mr-2 shrink-0" />
+            <span className="truncate">People ({peopleSection?.mergedContacts?.length ?? 0})</span>
           </TabsTrigger>
-          <TabsTrigger value="groups" className="data-[state=active]:bg-zinc-800">
-            <MessageSquare className="w-4 h-4 mr-2" />
-            Groups ({groups.length})
+          <TabsTrigger value="groups" className="data-[state=active]:bg-zinc-800 text-xs sm:text-sm px-1 sm:px-3">
+            <MessageSquare className="w-4 h-4 mr-1 sm:mr-2 shrink-0" />
+            <span className="truncate">Groups ({groups.length})</span>
           </TabsTrigger>
-          <TabsTrigger value="devices" className="data-[state=active]:bg-zinc-800">
-            <Smartphone className="w-4 h-4 mr-2" />
-            Devices ({devices.paired.length})
+          <TabsTrigger value="devices" className="data-[state=active]:bg-zinc-800 text-xs sm:text-sm px-1 sm:px-3">
+            <Smartphone className="w-4 h-4 mr-1 sm:mr-2 shrink-0" />
+            <span className="truncate">Devices ({devices.paired.length})</span>
           </TabsTrigger>
         </TabsList>
 
@@ -417,15 +417,15 @@ export default function ContactsPage() {
                         {data.pairingRequests.map((req) => (
                           <div
                             key={`${ch}-${req.code}`}
-                            className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 flex items-center justify-between gap-4"
+                            className="bg-zinc-900 rounded-xl border border-zinc-800 p-3 sm:p-4 space-y-2 sm:space-y-0 sm:flex sm:items-center sm:justify-between sm:gap-4"
                           >
-                            <div>
-                              <div className="font-mono text-sm">{req.id}</div>
+                            <div className="min-w-0">
+                              <div className="font-mono text-sm truncate">{req.id}</div>
                               <div className="text-xs text-zinc-500">
                                 Code: {req.code} · {formatDate(req.createdAt)}
                               </div>
                             </div>
-                            <div className="flex gap-2">
+                            <div className="flex gap-2 shrink-0">
                               <Button
                                 size="sm"
                                 className="bg-green-600 hover:bg-green-700 text-white"
@@ -475,9 +475,9 @@ export default function ContactsPage() {
                     {peopleSection.addressBook.suggestions.map((sug) => (
                       <div
                         key={sug.id}
-                        className="bg-orange-500/10 rounded-xl border border-orange-500/30 p-4 flex items-center justify-between gap-4 flex-wrap"
+                        className="bg-orange-500/10 rounded-xl border border-orange-500/30 p-3 sm:p-4 space-y-2"
                       >
-                        <p className="text-sm text-zinc-300">
+                        <p className="text-xs sm:text-sm text-zinc-300 break-words">
                           {sug.reason} — {channelLabel(sug.identityA.channel)} {sug.identityA.id} ↔ {channelLabel(sug.identityB.channel)} {sug.identityB.id}
                         </p>
                         <div className="flex gap-2">
@@ -529,13 +529,13 @@ export default function ContactsPage() {
                           className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden"
                         >
                           <div
-                            className="p-4 flex items-center justify-between gap-4 cursor-pointer"
+                            className="p-3 sm:p-4 cursor-pointer"
                             onClick={() =>
                               setExpandedContactId(isExpanded ? null : expandKey)
                             }
                           >
-                            <div className="flex items-center gap-3 min-w-0 flex-1">
-                              <span className="text-xl shrink-0">👤</span>
+                            <div className="flex items-start gap-2 sm:gap-3">
+                              <span className="text-lg sm:text-xl shrink-0 mt-0.5">👤</span>
                               <div className="min-w-0 flex-1">
                                 {entry.contactId && editingName?.contactId === entry.contactId ? (
                                   <input
@@ -575,36 +575,45 @@ export default function ContactsPage() {
                                     <Badge
                                       key={`${ident.channel}-${ident.id}`}
                                       variant="secondary"
-                                      className="text-xs"
+                                      className="text-xs max-w-[180px] sm:max-w-none truncate"
                                     >
                                       {channelLabel(ident.channel)} · {ident.id}
                                     </Badge>
                                   ))}
                                 </div>
                               </div>
-                              {entry.contactId && editingName?.contactId !== entry.contactId && (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="shrink-0"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setEditingName({
-                                      contactId: entry.contactId!,
-                                      value: entry.displayName,
-                                    });
-                                  }}
-                                  disabled={busy !== null}
-                                >
-                                  <Pencil className="w-4 h-4" />
-                                </Button>
-                              )}
+                              <div className="flex items-center gap-1 shrink-0">
+                                {entry.contactId && editingName?.contactId !== entry.contactId && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-8 w-8 p-0"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingName({
+                                        contactId: entry.contactId!,
+                                        value: entry.displayName,
+                                      });
+                                    }}
+                                    disabled={busy !== null}
+                                  >
+                                    <Pencil className="w-4 h-4" />
+                                  </Button>
+                                )}
+                                {isExpanded ? (
+                                  <ChevronUp className="w-5 h-5 text-zinc-500" />
+                                ) : (
+                                  <ChevronDown className="w-5 h-5 text-zinc-500" />
+                                )}
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2 shrink-0">
+                            {/* Action buttons row */}
+                            <div className="flex items-center gap-2 mt-2 ml-7 sm:ml-9 flex-wrap">
                               {!entry.fromAddressBook && entry.identities.length === 1 && (
                                 <Button
                                   size="sm"
                                   variant="outline"
+                                  className="h-7 text-xs px-2"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setNameModalFor({
@@ -614,21 +623,22 @@ export default function ContactsPage() {
                                   }}
                                   disabled={busy !== null}
                                 >
-                                  <Pencil className="w-4 h-4 mr-1" />
-                                  Name
+                                  <Pencil className="w-3 h-3 mr-1" />
+                                  Add to book
                                 </Button>
                               )}
                               {entry.fromAddressBook && (
                                 <Button
                                   size="sm"
                                   variant="outline"
+                                  className="h-7 text-xs px-2"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setLinkModalFor(entry);
                                   }}
                                   disabled={busy !== null}
                                 >
-                                  <Link2 className="w-4 h-4 mr-1" />
+                                  <Link2 className="w-3 h-3 mr-1" />
                                   Link
                                 </Button>
                               )}
@@ -636,22 +646,18 @@ export default function ContactsPage() {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  className="text-red-400 border-red-500/30 hover:bg-red-500/10"
+                                  className="h-7 text-xs px-2 text-red-400 border-red-500/30 hover:bg-red-500/10"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     handleBlockUser(entry.identities[0].id, entry.identities[0].channel);
                                   }}
                                   disabled={busy !== null}
                                 >
-                                  <Ban className="w-4 h-4" />
+                                  <Ban className="w-3 h-3 mr-1" />
+                                  Block
                                 </Button>
                               )}
                             </div>
-                            {isExpanded ? (
-                              <ChevronUp className="w-5 h-5 text-zinc-500 shrink-0" />
-                            ) : (
-                              <ChevronDown className="w-5 h-5 text-zinc-500 shrink-0" />
-                            )}
                           </div>
 
                           {isExpanded && (
@@ -842,10 +848,10 @@ export default function ContactsPage() {
                     {devices.pending.map((p) => (
                       <div
                         key={p.requestId}
-                        className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 flex items-center justify-between gap-4"
+                        className="bg-zinc-900 rounded-xl border border-zinc-800 p-3 sm:p-4 space-y-2 sm:space-y-0 sm:flex sm:items-center sm:justify-between sm:gap-4"
                       >
-                        <div>
-                          <div className="font-mono text-sm truncate max-w-[200px]">{p.deviceId}</div>
+                        <div className="min-w-0">
+                          <div className="font-mono text-xs sm:text-sm truncate">{p.deviceId}</div>
                           <div className="text-xs text-zinc-500">
                             {p.clientId ?? "—"} · {p.platform ?? "—"}
                           </div>
@@ -894,15 +900,15 @@ export default function ContactsPage() {
                     {devices.paired.map((d) => (
                       <div
                         key={d.deviceId}
-                        className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 flex items-center justify-between gap-4"
+                        className="bg-zinc-900 rounded-xl border border-zinc-800 p-3 sm:p-4 space-y-2 sm:space-y-0 sm:flex sm:items-center sm:justify-between sm:gap-4"
                       >
-                        <div className="flex items-center gap-3">
-                          <Smartphone className="w-5 h-5 text-zinc-500" />
-                          <div>
-                            <div className="font-medium text-sm">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <Smartphone className="w-5 h-5 text-zinc-500 shrink-0" />
+                          <div className="min-w-0">
+                            <div className="font-medium text-sm truncate">
                               {d.displayName || d.clientId || d.deviceId.slice(0, 12)}
                             </div>
-                            <div className="text-xs text-zinc-500">
+                            <div className="text-xs text-zinc-500 truncate">
                               {d.platform ?? "—"} · {d.role ?? "—"} · {d.createdAtMs ? formatDate(new Date(d.createdAtMs).toISOString()) : ""}
                             </div>
                           </div>
@@ -940,6 +946,88 @@ export default function ContactsPage() {
           channelLabel={channelLabel}
         />
       )}
+
+      {nameModalFor && (
+        <NameContactModal
+          identity={nameModalFor}
+          onClose={() => setNameModalFor(null)}
+          onSave={(displayName) =>
+            handleCreateContact(nameModalFor.channel, nameModalFor.id, displayName)
+          }
+          busy={busy}
+          channelLabel={channelLabel}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Name / Add to Address Book Modal ─────────────────────────────────────
+function NameContactModal({
+  identity,
+  onClose,
+  onSave,
+  busy,
+  channelLabel,
+}: {
+  identity: { channel: string; id: string };
+  onClose: () => void;
+  onSave: (displayName: string) => Promise<void>;
+  busy: string | null;
+  channelLabel: (ch: string) => string;
+}) {
+  const [name, setName] = useState(identity.id);
+  const isBusy = busy === `create-${identity.channel}-${identity.id}`;
+
+  const handleSubmit = async () => {
+    if (!name.trim()) return;
+    await onSave(name.trim());
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center p-4">
+      <div className="bg-zinc-900 rounded-xl border border-zinc-800 w-full max-w-sm">
+        <div className="flex items-center justify-between p-4 border-b border-zinc-800">
+          <h3 className="font-semibold text-lg">Add to Address Book</h3>
+          <button onClick={onClose} className="p-1 rounded hover:bg-zinc-800 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-4 space-y-4">
+          <div className="flex items-center gap-2 text-sm text-zinc-400">
+            <Badge variant="secondary">{channelLabel(identity.channel)}</Badge>
+            <span className="font-mono truncate">{identity.id}</span>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-zinc-300 mb-1 block">Display Name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Enter a name..."
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSubmit();
+                if (e.key === "Escape") onClose();
+              }}
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+            />
+          </div>
+        </div>
+        <div className="p-4 border-t border-zinc-800 flex gap-3">
+          <Button variant="outline" className="flex-1" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
+            onClick={handleSubmit}
+            disabled={!name.trim() || isBusy}
+          >
+            {isBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

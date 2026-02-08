@@ -270,7 +270,7 @@ export default function SkillsPage() {
           <Puzzle className="w-6 h-6 text-orange-500" />
           <div>
             <h1 className="text-2xl font-bold">Skills</h1>
-            <p className="text-sm text-zinc-400">
+            <p className="text-xs sm:text-sm text-zinc-400">
               {skills.length} total · {eligibleCount} active · {unavailableCount} need deps
             </p>
           </div>
