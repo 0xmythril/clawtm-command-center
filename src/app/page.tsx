@@ -53,6 +53,7 @@ export default function DashboardPage() {
   const [soulLoading, setSoulLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [proposals, setProposals] = useState("");
+  const [heartbeatMd, setHeartbeatMd] = useState("");
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
@@ -88,9 +89,10 @@ export default function DashboardPage() {
   useEffect(() => {
     async function fetchWorkspaceFiles() {
       try {
-        const [soulRes, proposalsRes] = await Promise.all([
+        const [soulRes, proposalsRes, heartbeatRes] = await Promise.all([
           fetch("/api/workspace?file=SOUL.md"),
           fetch("/api/workspace?file=PROPOSALS.md").catch(() => null),
+          fetch("/api/workspace?file=HEARTBEAT.md").catch(() => null),
         ]);
         
         const soulData = await soulRes.json();
@@ -99,6 +101,11 @@ export default function DashboardPage() {
         if (proposalsRes) {
           const proposalsData = await proposalsRes.json();
           setProposals(proposalsData.content || "");
+        }
+
+        if (heartbeatRes) {
+          const heartbeatData = await heartbeatRes.json();
+          setHeartbeatMd(heartbeatData.content || "");
         }
       } catch {
         setSoul("");
@@ -153,7 +160,7 @@ export default function DashboardPage() {
         connected={connected}
         uptime={uptimeStr}
         lastHeartbeat={heartbeatTime}
-        heartbeatText={lastHeartbeat?.text}
+        heartbeatText={lastHeartbeat?.text || heartbeatMd}
         heartbeatSource={lastHeartbeat?.source}
         defaultCollapsed={false}
       />

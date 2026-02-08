@@ -132,16 +132,18 @@ export function StatusCard({
         {heartbeatText ? (
           <div className="pt-2 border-t border-zinc-800">
             <div className="flex items-start gap-2 mb-1">
-              <span className="text-zinc-400 text-xs">Instructions</span>
+              <span className="text-zinc-400 text-xs">
+                {heartbeatSource ? "Instructions" : "Daily Tasks"}
+              </span>
               {heartbeatSource && (
                 <span className="text-xs bg-zinc-800 px-2 py-0.5 rounded text-zinc-500">
                   {heartbeatSource}
                 </span>
               )}
             </div>
-            <p className="text-xs text-zinc-300 leading-relaxed whitespace-pre-wrap break-words">
+            <div className="text-xs text-zinc-300 leading-relaxed whitespace-pre-wrap break-words max-h-48 overflow-y-auto">
               {heartbeatText}
-            </p>
+            </div>
           </div>
         ) : (
           <div className="pt-2 border-t border-zinc-800">

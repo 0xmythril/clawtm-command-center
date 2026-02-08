@@ -17,6 +17,7 @@ export default function MemoryPage() {
   const [memoryFiles, setMemoryFiles] = useState<MemoryFile[]>([]);
   const [intelligenceFiles, setIntelligenceFiles] = useState<MemoryFile[]>([]);
   const [longTermMemory, setLongTermMemory] = useState<string>("");
+  const [userMd, setUserMd] = useState<string>("");
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<"memory" | "intelligence">("memory");
   const [fileContent, setFileContent] = useState<string>("");
@@ -26,15 +27,17 @@ export default function MemoryPage() {
   const fetchFiles = async () => {
     setLoading(true);
     try {
-      const [memoryRes, intelligenceRes, longTermRes] = await Promise.all([
+      const [memoryRes, intelligenceRes, longTermRes, userRes] = await Promise.all([
         fetch("/api/memory?type=memory"),
         fetch("/api/memory?type=intelligence"),
         fetch("/api/workspace?file=MEMORY.md"),
+        fetch("/api/workspace?file=USER.md"),
       ]);
 
       const memoryData = await memoryRes.json();
       const intelligenceData = await intelligenceRes.json();
       const longTermData = await longTermRes.json();
+      const userData = await userRes.json();
 
       const parseFiles = (files: string[]): MemoryFile[] =>
         files
@@ -47,6 +50,7 @@ export default function MemoryPage() {
       setMemoryFiles(parseFiles(memoryData.files || []));
       setIntelligenceFiles(parseFiles(intelligenceData.files || []));
       setLongTermMemory(longTermData.content || "");
+      setUserMd(userData.content || "");
 
       // Auto-select today's file or most recent
       const today = new Date().toISOString().split("T")[0];
@@ -302,29 +306,54 @@ export default function MemoryPage() {
             <Info className="w-4 h-4 shrink-0 mt-0.5" />
             <span>
               <strong className="text-zinc-400">Core Memory</strong> — Persistent knowledge and context 
-              that the agent carries across all conversations. This is MEMORY.md.
+              that the agent carries across all conversations.
             </span>
           </div>
 
-          <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 sm:p-6 overflow-hidden">
-            <div className="flex items-center gap-2 mb-4">
-              <FileText className="w-5 h-5 text-orange-500" />
-              <h3 className="font-medium">MEMORY.md</h3>
-              <Badge variant="secondary">Core</Badge>
+          <div className="space-y-4">
+            {/* MEMORY.md */}
+            <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 sm:p-6 overflow-hidden">
+              <div className="flex items-center gap-2 mb-4">
+                <FileText className="w-5 h-5 text-orange-500" />
+                <h3 className="font-medium">MEMORY.md</h3>
+                <Badge variant="secondary">Core</Badge>
+              </div>
+              {loading ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-full skeleton-shimmer" />
+                  <Skeleton className="h-4 w-3/4 skeleton-shimmer" />
+                  <Skeleton className="h-4 w-5/6 skeleton-shimmer" />
+                </div>
+              ) : longTermMemory ? (
+                <div className="text-sm leading-relaxed overflow-x-hidden">
+                  {renderContent(longTermMemory)}
+                </div>
+              ) : (
+                <p className="text-zinc-400 text-sm">No long-term memory configured</p>
+              )}
             </div>
-            {loading ? (
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-full skeleton-shimmer" />
-                <Skeleton className="h-4 w-3/4 skeleton-shimmer" />
-                <Skeleton className="h-4 w-5/6 skeleton-shimmer" />
+
+            {/* USER.md */}
+            <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 sm:p-6 overflow-hidden">
+              <div className="flex items-center gap-2 mb-4">
+                <FileText className="w-5 h-5 text-sky-500" />
+                <h3 className="font-medium">USER.md</h3>
+                <Badge variant="secondary">User Profile</Badge>
               </div>
-            ) : longTermMemory ? (
-              <div className="text-sm leading-relaxed overflow-x-hidden">
-                {renderContent(longTermMemory)}
-              </div>
-            ) : (
-              <p className="text-zinc-400 text-sm">No long-term memory configured</p>
-            )}
+              {loading ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-full skeleton-shimmer" />
+                  <Skeleton className="h-4 w-3/4 skeleton-shimmer" />
+                  <Skeleton className="h-4 w-5/6 skeleton-shimmer" />
+                </div>
+              ) : userMd ? (
+                <div className="text-sm leading-relaxed overflow-x-hidden">
+                  {renderContent(userMd)}
+                </div>
+              ) : (
+                <p className="text-zinc-400 text-sm">No user profile configured</p>
+              )}
+            </div>
           </div>
         </TabsContent>
       </Tabs>
