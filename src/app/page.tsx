@@ -153,6 +153,8 @@ export default function DashboardPage() {
         connected={connected}
         uptime={uptimeStr}
         lastHeartbeat={heartbeatTime}
+        heartbeatText={lastHeartbeat?.text}
+        heartbeatSource={lastHeartbeat?.source}
         defaultCollapsed={false}
       />
 

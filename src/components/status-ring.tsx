@@ -27,6 +27,8 @@ interface StatusCardProps {
   connected: boolean;
   uptime?: string;
   lastHeartbeat?: string;
+  heartbeatText?: string;
+  heartbeatSource?: string;
   defaultCollapsed?: boolean;
 }
 
@@ -34,6 +36,8 @@ export function StatusCard({
   connected, 
   uptime, 
   lastHeartbeat,
+  heartbeatText,
+  heartbeatSource,
   defaultCollapsed = false 
 }: StatusCardProps) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
@@ -123,6 +127,23 @@ export function StatusCard({
           </div>
           <span className="font-mono text-zinc-200">{lastHeartbeat || "—"}</span>
         </div>
+
+        {/* Heartbeat instructions/text */}
+        {heartbeatText && (
+          <div className="pt-2 border-t border-zinc-800">
+            <div className="flex items-start gap-2 mb-1">
+              <span className="text-zinc-400 text-xs">Instructions</span>
+              {heartbeatSource && (
+                <span className="text-xs bg-zinc-800 px-2 py-0.5 rounded text-zinc-500">
+                  {heartbeatSource}
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-zinc-300 leading-relaxed whitespace-pre-wrap break-words">
+              {heartbeatText}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
