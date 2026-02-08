@@ -1,16 +1,13 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import { StatusCard } from "@/components/status-ring";
 import { SoulCard } from "@/components/soul-card";
 import { CronTimeline } from "@/components/cron-timeline";
-import { FavoritesGrid } from "@/components/favorites-grid";
 import { AgentLevelBadge } from "@/components/agent-level";
 import { ChannelLinks } from "@/components/channel-links";
 import { ContactsSummary } from "@/components/contacts-summary";
 import { RefreshCw, Sparkles } from "lucide-react";
-import { useLocalStorage } from "@/lib/use-local-storage";
 import {
   getCronJobs,
   getLastHeartbeat,
@@ -48,7 +45,6 @@ function formatRelativeTime(ts?: number): string {
 }
 
 export default function DashboardPage() {
-  const router = useRouter();
   const [connected, setConnected] = useState(false);
   const [uptime, setUptime] = useState<number | undefined>();
   const [cronJobs, setCronJobs] = useState<CronJob[]>([]);
@@ -56,10 +52,7 @@ export default function DashboardPage() {
   const [soul, setSoul] = useState<string>("");
   const [soulLoading, setSoulLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [proposals, setProposals] = useState<string>("");
-  
-  // Favorites stored in localStorage
-  const [favorites, setFavorites] = useLocalStorage<string[]>("pinned-scripts", []);
+  const [proposals, setProposals] = useState("");
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
@@ -115,18 +108,6 @@ export default function DashboardPage() {
     }
     fetchWorkspaceFiles();
   }, []);
-
-  const handleRunScript = async (scriptName: string) => {
-    try {
-      await fetch("/api/exec", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ script: scriptName }),
-      });
-    } catch (err) {
-      console.error("Failed to run script:", err);
-    }
-  };
 
   const uptimeStr = uptime ? formatUptime(uptime * 1000) : undefined;
   const heartbeatTime = lastHeartbeat?.ts
@@ -199,26 +180,6 @@ export default function DashboardPage() {
 
       {/* Upcoming Jobs */}
       <CronTimeline jobs={cronJobs} loading={refreshing && cronJobs.length === 0} />
-
-      {/* Quick Actions - Favorites */}
-      <section>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold">Quick Actions</h2>
-          {favorites.length > 0 && (
-            <button
-              onClick={() => router.push("/actions")}
-              className="text-sm text-orange-400 hover:text-orange-300"
-            >
-              Manage
-            </button>
-          )}
-        </div>
-        <FavoritesGrid
-          favorites={favorites}
-          onRun={handleRunScript}
-          onManage={() => router.push("/actions")}
-        />
-      </section>
     </div>
   );
 }
