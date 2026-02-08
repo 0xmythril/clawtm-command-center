@@ -128,8 +128,8 @@ export function StatusCard({
           <span className="font-mono text-zinc-200">{lastHeartbeat || "—"}</span>
         </div>
 
-        {/* Heartbeat instructions/text */}
-        {heartbeatText && (
+        {/* Heartbeat instructions/text OR heartbeat details */}
+        {heartbeatText ? (
           <div className="pt-2 border-t border-zinc-800">
             <div className="flex items-start gap-2 mb-1">
               <span className="text-zinc-400 text-xs">Instructions</span>
@@ -141,6 +141,12 @@ export function StatusCard({
             </div>
             <p className="text-xs text-zinc-300 leading-relaxed whitespace-pre-wrap break-words">
               {heartbeatText}
+            </p>
+          </div>
+        ) : (
+          <div className="pt-2 border-t border-zinc-800">
+            <p className="text-xs text-zinc-500 italic">
+              No active instructions. Heartbeat is running on interval.
             </p>
           </div>
         )}
