@@ -140,7 +140,7 @@ export class GatewayClient {
         id: "command-center",
         version: "1.0.0",
         platform: typeof navigator !== "undefined" ? navigator.platform : "web",
-        mode: "webchat",
+        mode: "command-center",
       },
       role: "operator",
       scopes: ["operator.admin", "operator.read", "operator.write"],

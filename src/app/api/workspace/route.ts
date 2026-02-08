@@ -13,6 +13,7 @@ const ALLOWED_FILES = [
   "TOOLS.md",
   "USER.md",
   "PROPOSALS.md",
+  "COMMAND_CENTER.md",
 ];
 
 export async function GET(request: NextRequest) {

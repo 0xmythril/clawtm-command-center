@@ -141,18 +141,12 @@ export default function DashboardPage() {
       {/* Header */}
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          {/* Logo - uses /public/logo.png if exists, fallback to emoji */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img 
-            src="/logo.png" 
+            src="/favicon.svg" 
             alt="ClawdTM" 
             className="w-10 h-10 rounded-full"
-            onError={(e) => {
-              // Fallback to emoji if image doesn't exist
-              e.currentTarget.style.display = 'none';
-              e.currentTarget.nextElementSibling?.classList.remove('hidden');
-            }}
           />
-          <span className="text-3xl hidden">🦞</span>
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold">ClawdTM</h1>

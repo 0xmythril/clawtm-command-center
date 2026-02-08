@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -108,6 +108,49 @@ export async function GET() {
   } catch (error) {
     return NextResponse.json(
       { error: "Failed to list scripts", scripts: [] },
+      { status: 500 }
+    );
+  }
+}
+
+// ─── Delete a script ─────────────────────────────────────────
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { name } = (await request.json()) as { name?: string };
+
+    if (!name) {
+      return NextResponse.json({ error: "Script name required" }, { status: 400 });
+    }
+
+    // Security: only allow .sh files, no path traversal
+    if (!name.endsWith(".sh")) {
+      return NextResponse.json({ error: "Only .sh scripts can be deleted" }, { status: 400 });
+    }
+    const baseName = path.basename(name);
+    if (baseName !== name || name.includes("..")) {
+      return NextResponse.json({ error: "Invalid script name" }, { status: 400 });
+    }
+
+    // Find the script in one of the trusted directories
+    for (const dir of SCRIPTS_DIRS) {
+      const scriptPath = path.join(dir, baseName);
+      try {
+        const realPath = await fs.realpath(scriptPath);
+        const realDir = await fs.realpath(dir).catch(() => dir);
+        if (!realPath.startsWith(realDir)) continue;
+
+        await fs.unlink(scriptPath);
+        return NextResponse.json({ success: true, deleted: baseName });
+      } catch {
+        // Not in this directory, try next
+      }
+    }
+
+    return NextResponse.json({ error: "Script not found" }, { status: 404 });
+  } catch (error) {
+    return NextResponse.json(
+      { error: "Failed to delete script" },
       { status: 500 }
     );
   }

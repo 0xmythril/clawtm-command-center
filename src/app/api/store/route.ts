@@ -1,76 +1,83 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "node:fs/promises";
+import path from "node:path";
 
-const CREDENTIALS_PATH =
-  process.env.CLAWDTM_CREDENTIALS || "/home/clawdbot/.config/clawdtm/credentials.json";
 const CLAWDTM_BASE = process.env.CLAWDTM_API_URL || "https://clawdtm.com/api/v1";
+const SKILLS_DIR =
+  process.env.SKILLS_PATH || "/home/clawdbot/.openclaw/skills";
 
-async function getApiKey(): Promise<string | null> {
-  // Prefer env var
-  if (process.env.CLAWDTM_API_KEY) return process.env.CLAWDTM_API_KEY;
-
-  try {
-    const raw = await fs.readFile(CREDENTIALS_PATH, "utf-8");
-    const creds = JSON.parse(raw);
-    return creds.api_key || null;
-  } catch {
-    return null;
-  }
-}
+// ─── Search skills (public, no auth) ─────────────────────────
 
 export async function GET(request: NextRequest) {
-  const apiKey = await getApiKey();
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "ClawdTM API key not configured" },
-      { status: 500 }
-    );
-  }
-
   const searchParams = request.nextUrl.searchParams;
-  const action = searchParams.get("action") || "list";
-  const slug = searchParams.get("slug");
-  const query = searchParams.get("q");
-  const filter = searchParams.get("filter") || "combined";
-
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${apiKey}`,
-    "Content-Type": "application/json",
-  };
+  const action = searchParams.get("action") || "search";
 
   try {
-    let url: string;
-
     switch (action) {
-      case "details":
+      case "search":
+      case "list": {
+        const params = new URLSearchParams();
+        const q = searchParams.get("q");
+        // The ClawdTM API requires `q` -- use a broad wildcard when browsing without a query
+        params.set("q", q || "");
+        params.set("limit", searchParams.get("limit") || "15");
+        const sort = searchParams.get("sort");
+        if (sort) params.set("sort", sort);
+        if (searchParams.get("safe_only") === "true") params.set("safe_only", "true");
+        if (searchParams.get("include_risky") === "true") params.set("include_risky", "true");
+        const minRating = searchParams.get("min_rating");
+        if (minRating) params.set("min_rating", minRating);
+        const category = searchParams.get("category");
+        if (category) params.set("category", category);
+
+        const url = `${CLAWDTM_BASE}/skills/search?${params}`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!data.success) {
+          return NextResponse.json(
+            { error: data.error || "Search failed", results: [] },
+            { status: res.status }
+          );
+        }
+
+        return NextResponse.json({
+          results: data.results || [],
+          result_count: data.result_count || 0,
+          query: data.query || "",
+        });
+      }
+
+      case "install-info": {
+        // Fetch install manifest (files + security) without writing to disk.
+        // The client uses this to show the risk modal before confirming.
+        const slug = searchParams.get("slug");
         if (!slug) {
           return NextResponse.json({ error: "slug required" }, { status: 400 });
         }
-        url = `${CLAWDTM_BASE}/skills?slug=${encodeURIComponent(slug)}`;
-        break;
 
-      case "reviews":
-        if (!slug) {
-          return NextResponse.json({ error: "slug required" }, { status: 400 });
+        const ackRisk = searchParams.get("acknowledge_risk") === "true";
+        let url = `${CLAWDTM_BASE}/skills/install?slug=${encodeURIComponent(slug)}`;
+        if (ackRisk) url += "&acknowledge_risk=true";
+
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!data.success) {
+          return NextResponse.json(
+            { error: data.error || "Install fetch failed", security: data.security },
+            { status: res.status }
+          );
         }
-        url = `${CLAWDTM_BASE}/skills/reviews?slug=${encodeURIComponent(slug)}&filter=${filter}`;
-        break;
 
-      case "list":
+        return NextResponse.json(data);
+      }
+
       default:
-        // Build query params for listing/searching
-        url = `${CLAWDTM_BASE}/skills`;
-        if (query) {
-          url += `?q=${encodeURIComponent(query)}`;
-        }
-        break;
+        return NextResponse.json({ error: "Unknown action" }, { status: 400 });
     }
-
-    const res = await fetch(url, { headers });
-    const data = await res.json();
-    return NextResponse.json(data);
   } catch (error) {
-    console.error("ClawdTM API error:", error);
+    console.error("ClawdTM Advisor API error:", error);
     return NextResponse.json(
       { error: "Failed to fetch from ClawdTM" },
       { status: 502 }
@@ -78,61 +85,82 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// ─── Install skill (write files to disk) ─────────────────────
+
 export async function POST(request: NextRequest) {
-  const apiKey = await getApiKey();
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "ClawdTM API key not configured" },
-      { status: 500 }
-    );
-  }
-
-  const body = await request.json();
-  const { action, slug, ...rest } = body as {
-    action: string;
-    slug?: string;
-    [key: string]: unknown;
-  };
-
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${apiKey}`,
-    "Content-Type": "application/json",
-  };
-
   try {
-    let url: string;
-    let method = "POST";
+    const body = await request.json();
+    const { slug, acknowledge_risk } = body as {
+      slug: string;
+      acknowledge_risk?: boolean;
+    };
 
-    switch (action) {
-      case "upvote":
-        url = `${CLAWDTM_BASE}/skills/upvote`;
-        break;
-      case "downvote":
-        url = `${CLAWDTM_BASE}/skills/downvote`;
-        break;
-      case "remove-vote":
-        url = `${CLAWDTM_BASE}/skills/vote`;
-        method = "DELETE";
-        break;
-      case "review":
-        url = `${CLAWDTM_BASE}/skills/reviews`;
-        break;
-      default:
-        return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+    if (!slug) {
+      return NextResponse.json({ error: "slug required" }, { status: 400 });
     }
 
-    const res = await fetch(url, {
-      method,
-      headers,
-      body: JSON.stringify({ slug, ...rest }),
-    });
+    // Fetch the install manifest from the Advisor API
+    let url = `${CLAWDTM_BASE}/skills/install?slug=${encodeURIComponent(slug)}`;
+    if (acknowledge_risk) url += "&acknowledge_risk=true";
+
+    const res = await fetch(url);
     const data = await res.json();
-    return NextResponse.json(data);
+
+    if (!data.success) {
+      return NextResponse.json(
+        {
+          error: data.error || "Install failed",
+          security: data.security,
+        },
+        { status: res.status }
+      );
+    }
+
+    // Write files to disk
+    const files: Array<{ path: string; content: string }> = data.files;
+    if (!files || files.length === 0) {
+      // Fallback: no files returned, suggest CLI install
+      return NextResponse.json({
+        success: false,
+        error: "No files returned from API. Use CLI: " + (data.skill?.install_command || `clawhub install ${slug}`),
+        fallback_command: data.skill?.install_command || `clawhub install ${slug}`,
+      });
+    }
+
+    const skillDir = path.join(SKILLS_DIR, slug);
+    await fs.mkdir(skillDir, { recursive: true });
+
+    const written: string[] = [];
+    for (const file of files) {
+      // Security: prevent path traversal
+      const safeName = path.normalize(file.path).replace(/^(\.\.[/\\])+/, "");
+      const filePath = path.join(skillDir, safeName);
+      const resolvedDir = path.dirname(filePath);
+
+      // Ensure the file stays within the skill directory
+      if (!filePath.startsWith(skillDir)) {
+        console.warn(`Skipping file with path traversal attempt: ${file.path}`);
+        continue;
+      }
+
+      await fs.mkdir(resolvedDir, { recursive: true });
+      await fs.writeFile(filePath, file.content, "utf-8");
+      written.push(safeName);
+    }
+
+    return NextResponse.json({
+      success: true,
+      skill: data.skill,
+      security: data.security,
+      community: data.community,
+      files_written: written,
+      install_dir: skillDir,
+    });
   } catch (error) {
-    console.error("ClawdTM API error:", error);
+    console.error("Skill install error:", error);
     return NextResponse.json(
-      { error: "Failed to contact ClawdTM" },
-      { status: 502 }
+      { error: "Failed to install skill" },
+      { status: 500 }
     );
   }
 }

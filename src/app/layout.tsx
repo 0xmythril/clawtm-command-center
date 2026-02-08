@@ -2,8 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { BottomNav } from "@/components/bottom-nav";
-import { ChatOverlay } from "@/components/chat-overlay";
-
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -53,7 +51,6 @@ export default function RootLayout({
           {children}
         </main>
         <BottomNav />
-        <ChatOverlay />
       </body>
     </html>
   );

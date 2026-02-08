@@ -9,7 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Play, Pause, RefreshCw, Clock, Loader2, Info, CheckCircle, XCircle,
   AlertCircle, FileCode, Star, Zap, ChevronDown, ChevronUp, X, Plus,
-  Trash2, CalendarClock,
+  Trash2, CalendarClock, ScrollText, Eraser, Terminal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocalStorage } from "@/lib/use-local-storage";
@@ -117,6 +117,59 @@ interface ExecResult {
   error?: string;
 }
 
+// ─────────────────────────────────────────────────────────────
+// Action log types
+// ─────────────────────────────────────────────────────────────
+
+interface ActionLogEntry {
+  id: string;
+  type: "script" | "cron";
+  name: string;
+  timestamp: number;
+  success: boolean;
+  durationMs?: number;
+  error?: string;
+  output?: string;
+}
+
+const MAX_LOG_ENTRIES = 50;
+
+function formatLogTime(ts: number): string {
+  const now = Date.now();
+  const diff = now - ts;
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  const date = new Date(ts);
+  const time = date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+
+  if (days === 0) {
+    if (minutes < 1) return `Just now`;
+    if (minutes < 60) return `${minutes}m ago · ${time}`;
+    return `${hours}h ago · ${time}`;
+  }
+  if (days === 1) return `Yesterday · ${time}`;
+  if (days < 7) return `${days}d ago · ${time}`;
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + ` · ${time}`;
+}
+
+// ─────────────────────────────────────────────────────────────
+// System crontab entry type
+// ─────────────────────────────────────────────────────────────
+
+interface SystemCronEntry {
+  id: string;
+  expr: string;
+  command: string;
+  comment?: string;
+  raw: string;
+}
+
 function formatModifiedDate(dateStr?: string): string {
   if (!dateStr) return "";
   try {
@@ -163,24 +216,47 @@ export default function ActionsPage() {
   const [showCreateCron, setShowCreateCron] = useState(false);
   const [confirmDeleteJob, setConfirmDeleteJob] = useState<string | null>(null);
 
+  // System crontab state
+  const [systemCronEntries, setSystemCronEntries] = useState<SystemCronEntry[]>([]);
+
   // Script state
   const [scripts, setScripts] = useState<Script[]>([]);
   const [runningScript, setRunningScript] = useState<string | null>(null);
   const [result, setResult] = useState<{ script: string; result: ExecResult } | null>(null);
   const [favorites, setFavorites] = useLocalStorage<string[]>("pinned-scripts", []);
   const [scheduleScript, setScheduleScript] = useState<string | null>(null);
+  const [confirmDeleteScript, setConfirmDeleteScript] = useState<string | null>(null);
+  const [deletingScript, setDeletingScript] = useState<string | null>(null);
+
+  // Action log
+  const [actionLog, setActionLog] = useLocalStorage<ActionLogEntry[]>("action-log", []);
+
+  const addLogEntry = useCallback(
+    (entry: Omit<ActionLogEntry, "id">) => {
+      setActionLog((prev) => {
+        const newEntry: ActionLogEntry = {
+          ...entry,
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        };
+        return [newEntry, ...prev].slice(0, MAX_LOG_ENTRIES);
+      });
+    },
+    [setActionLog]
+  );
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      const [jobs, status, scriptsRes] = await Promise.all([
+      const [jobs, status, scriptsRes, crontabRes] = await Promise.all([
         getCronJobs().catch(() => []),
         getCronStatus().catch(() => null),
         fetch("/api/scripts").then((r) => r.json()).catch(() => ({ scripts: [] })),
+        fetch("/api/crontab").then((r) => r.json()).catch(() => ({ entries: [] })),
       ]);
       setCronJobs(jobs);
       setCronStatus(status);
       setScripts(scriptsRes.scripts || []);
+      setSystemCronEntries(crontabRes.entries || []);
     } catch (err) {
       console.error("Failed to refresh:", err);
     } finally {
@@ -199,10 +275,27 @@ export default function ActionsPage() {
 
   const handleRunCron = async (jobId: string) => {
     setBusyJobId(jobId);
+    const job = cronJobs.find((j) => j.id === jobId);
+    const start = Date.now();
     try {
       await runCronJob(jobId);
+      addLogEntry({
+        type: "cron",
+        name: job?.name || jobId,
+        timestamp: Date.now(),
+        success: true,
+        durationMs: Date.now() - start,
+      });
       await refresh();
     } catch (err) {
+      addLogEntry({
+        type: "cron",
+        name: job?.name || jobId,
+        timestamp: Date.now(),
+        success: false,
+        durationMs: Date.now() - start,
+        error: String(err),
+      });
       console.error("Failed to run job:", err);
     } finally {
       setBusyJobId(null);
@@ -252,6 +345,7 @@ export default function ActionsPage() {
   const runScript = async (scriptName: string) => {
     setRunningScript(scriptName);
     setResult(null);
+    const start = Date.now();
     try {
       const res = await fetch("/api/exec", {
         method: "POST",
@@ -260,10 +354,27 @@ export default function ActionsPage() {
       });
       const data: ExecResult = await res.json();
       setResult({ script: scriptName, result: data });
+      addLogEntry({
+        type: "script",
+        name: scriptName,
+        timestamp: Date.now(),
+        success: data.success,
+        durationMs: Date.now() - start,
+        error: data.error,
+        output: (data.stdout || data.stderr || "").slice(0, 200),
+      });
     } catch (err) {
       setResult({
         script: scriptName,
         result: { success: false, stdout: "", stderr: "", error: String(err) },
+      });
+      addLogEntry({
+        type: "script",
+        name: scriptName,
+        timestamp: Date.now(),
+        success: false,
+        durationMs: Date.now() - start,
+        error: String(err),
       });
     } finally {
       setRunningScript(null);
@@ -297,11 +408,36 @@ export default function ActionsPage() {
     setScheduleScript(null);
   };
 
+  const handleDeleteScript = async (scriptName: string) => {
+    setDeletingScript(scriptName);
+    try {
+      const res = await fetch("/api/scripts", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: scriptName }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setConfirmDeleteScript(null);
+        // Remove from favorites if pinned
+        setFavorites((prev) => prev.filter((f) => f !== scriptName));
+        await refresh();
+      } else {
+        console.error("Delete failed:", data.error);
+      }
+    } catch (err) {
+      console.error("Failed to delete script:", err);
+    } finally {
+      setDeletingScript(null);
+    }
+  };
+
   // ─────────────────────────────────────────────────────────────
   // Counts
   // ─────────────────────────────────────────────────────────────
 
   const enabledCronCount = cronJobs.filter((j) => j.enabled).length;
+  const totalScheduledCount = enabledCronCount + systemCronEntries.length;
 
   return (
     <div className="space-y-6">
@@ -312,7 +448,7 @@ export default function ActionsPage() {
           <div>
             <h1 className="text-2xl font-bold">Actions</h1>
             <p className="text-sm text-zinc-400">
-              {enabledCronCount} scheduled · {scripts.length} scripts
+              {totalScheduledCount} scheduled · {scripts.length} scripts
             </p>
           </div>
         </div>
@@ -327,14 +463,18 @@ export default function ActionsPage() {
 
       {/* Tabs */}
       <Tabs defaultValue="scheduled" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2 bg-zinc-900">
+        <TabsList className="grid w-full grid-cols-3 bg-zinc-900">
           <TabsTrigger value="scheduled" className="data-[state=active]:bg-zinc-800">
             <Clock className="w-4 h-4 mr-2" />
-            Scheduled ({enabledCronCount})
+            Scheduled ({totalScheduledCount})
           </TabsTrigger>
           <TabsTrigger value="manual" className="data-[state=active]:bg-zinc-800">
             <FileCode className="w-4 h-4 mr-2" />
             Scripts ({scripts.length})
+          </TabsTrigger>
+          <TabsTrigger value="log" className="data-[state=active]:bg-zinc-800">
+            <ScrollText className="w-4 h-4 mr-2" />
+            Log ({actionLog.length})
           </TabsTrigger>
         </TabsList>
 
@@ -525,6 +665,53 @@ export default function ActionsPage() {
               })
             )}
           </section>
+
+          {/* System Crontab Entries */}
+          {systemCronEntries.length > 0 && (
+            <section className="space-y-3 mt-6">
+              <div className="flex items-center gap-2">
+                <Terminal className="w-4 h-4 text-zinc-500" />
+                <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
+                  System Crontab ({systemCronEntries.length})
+                </h3>
+              </div>
+              <div className="flex items-start gap-2 text-xs text-zinc-500 bg-zinc-900/50 rounded-lg p-3 border border-zinc-800/50">
+                <Info className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>
+                  These jobs run via the OS cron scheduler, not OpenClaw. They are read-only here.
+                </span>
+              </div>
+              {systemCronEntries.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="bg-zinc-900 rounded-xl border border-zinc-800/50 p-4"
+                >
+                  <div className="flex items-start gap-3">
+                    <Terminal className="w-5 h-5 text-zinc-500 shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-medium text-sm">
+                          {entry.comment || "System Job"}
+                        </h3>
+                        <Badge variant="outline" className="text-xs text-zinc-500">
+                          System
+                        </Badge>
+                      </div>
+                      <div className="text-sm text-orange-400 mt-1">
+                        {humanizeCron(entry.expr)}
+                      </div>
+                      <code className="block text-xs text-zinc-500 mt-2 font-mono break-all bg-zinc-800/50 rounded px-2 py-1">
+                        {entry.command}
+                      </code>
+                      <div className="text-xs text-zinc-600 mt-1">
+                        <code>{entry.expr}</code>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </section>
+          )}
         </TabsContent>
 
         {/* ═══════════════════════════════════════════════════════════ */}
@@ -641,11 +828,101 @@ export default function ActionsPage() {
                           <CalendarClock className="w-4 h-4 mr-1" />
                           Schedule
                         </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setConfirmDeleteScript(script.name)}
+                          className="h-8 w-8 p-0 text-zinc-500 border-zinc-700 hover:text-red-400 hover:border-red-500/30 hover:bg-red-500/10"
+                          title="Delete script"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
                       </div>
                     </div>
                   </div>
                 );
               })
+            )}
+          </section>
+        </TabsContent>
+
+        {/* ═══════════════════════════════════════════════════════════ */}
+        {/* LOG TAB */}
+        {/* ═══════════════════════════════════════════════════════════ */}
+        <TabsContent value="log" className="space-y-4">
+          {/* Header row with clear button */}
+          {actionLog.length > 0 && (
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-zinc-500">
+                Last {actionLog.length} actions (kept locally)
+              </p>
+              <button
+                onClick={() => setActionLog([])}
+                className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+              >
+                <Eraser className="w-3.5 h-3.5" />
+                Clear
+              </button>
+            </div>
+          )}
+
+          <section className="space-y-2">
+            {actionLog.length === 0 ? (
+              <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-8 text-center">
+                <ScrollText className="w-12 h-12 text-zinc-700 mx-auto mb-3" />
+                <p className="text-zinc-400">No actions recorded yet</p>
+                <p className="text-xs text-zinc-500 mt-1">
+                  Run a script or trigger a cron job to see it here.
+                </p>
+              </div>
+            ) : (
+              actionLog.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="bg-zinc-900 rounded-xl border border-zinc-800 p-3 flex items-start gap-3"
+                >
+                  {/* Status icon */}
+                  <div className="mt-0.5 shrink-0">
+                    {entry.success ? (
+                      <CheckCircle className="w-4 h-4 text-green-500" />
+                    ) : (
+                      <XCircle className="w-4 h-4 text-red-500" />
+                    )}
+                  </div>
+
+                  {/* Details */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-sm truncate">{entry.name}</span>
+                      <Badge
+                        variant="secondary"
+                        className={cn(
+                          "text-xs",
+                          entry.type === "cron" ? "text-sky-400" : "text-orange-400"
+                        )}
+                      >
+                        {entry.type === "cron" ? "Cron" : "Script"}
+                      </Badge>
+                      {entry.durationMs !== undefined && (
+                        <span className="text-xs text-zinc-600">
+                          {entry.durationMs < 1000
+                            ? `${entry.durationMs}ms`
+                            : `${(entry.durationMs / 1000).toFixed(1)}s`}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-zinc-500 mt-1">
+                      {formatLogTime(entry.timestamp)}
+                    </div>
+                    {entry.error && (
+                      <p className="text-xs text-red-400 mt-1 truncate">{entry.error}</p>
+                    )}
+                    {entry.output && !entry.error && (
+                      <p className="text-xs text-zinc-500 mt-1 truncate">{entry.output}</p>
+                    )}
+                  </div>
+                </div>
+              ))
             )}
           </section>
         </TabsContent>
@@ -695,6 +972,43 @@ export default function ActionsPage() {
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   "Delete"
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════ */}
+      {/* Confirm Delete Script Modal */}
+      {/* ═══════════════════════════════════════════════════════════ */}
+      {confirmDeleteScript && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+          <div className="bg-zinc-900 rounded-xl border border-zinc-800 w-full max-w-sm p-6">
+            <h3 className="font-semibold text-lg mb-2">Delete Script</h3>
+            <p className="text-sm text-zinc-400 mb-2">
+              Are you sure you want to delete{" "}
+              <strong className="text-zinc-200 font-mono">{confirmDeleteScript}</strong>?
+            </p>
+            <p className="text-xs text-zinc-500 mb-6">
+              This will permanently remove the file from disk. This cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <Button variant="outline" className="flex-1" onClick={() => setConfirmDeleteScript(null)}>
+                Cancel
+              </Button>
+              <Button
+                className="flex-1 bg-red-500 hover:bg-red-600 text-white"
+                onClick={() => handleDeleteScript(confirmDeleteScript)}
+                disabled={deletingScript === confirmDeleteScript}
+              >
+                {deletingScript === confirmDeleteScript ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4 mr-1" />
+                    Delete
+                  </>
                 )}
               </Button>
             </div>

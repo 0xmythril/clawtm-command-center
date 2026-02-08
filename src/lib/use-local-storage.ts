@@ -1,37 +1,38 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 export function useLocalStorage<T>(
   key: string,
   initialValue: T
 ): [T, (value: T | ((prev: T) => T)) => void] {
-  // State to store our value
   const [storedValue, setStoredValue] = useState<T>(initialValue);
-  const [isHydrated, setIsHydrated] = useState(false);
+
+  // Keep a ref to the latest value so the setter never has stale closures
+  const valueRef = useRef<T>(storedValue);
+  valueRef.current = storedValue;
 
   // Load from localStorage after mount (client-side only)
   useEffect(() => {
     try {
       const item = window.localStorage.getItem(key);
       if (item) {
-        setStoredValue(JSON.parse(item));
+        const parsed = JSON.parse(item) as T;
+        setStoredValue(parsed);
+        valueRef.current = parsed;
       }
     } catch (error) {
       console.warn(`Error reading localStorage key "${key}":`, error);
     }
-    setIsHydrated(true);
   }, [key]);
 
-  // Return a wrapped version of useState's setter function that
-  // persists the new value to localStorage
   const setValue = useCallback(
     (value: T | ((prev: T) => T)) => {
       try {
-        // Allow value to be a function so we have same API as useState
         const valueToStore =
-          value instanceof Function ? value(storedValue) : value;
+          value instanceof Function ? value(valueRef.current) : value;
         setStoredValue(valueToStore);
+        valueRef.current = valueToStore;
         if (typeof window !== "undefined") {
           window.localStorage.setItem(key, JSON.stringify(valueToStore));
         }
@@ -39,7 +40,7 @@ export function useLocalStorage<T>(
         console.warn(`Error setting localStorage key "${key}":`, error);
       }
     },
-    [key, storedValue]
+    [key]
   );
 
   return [storedValue, setValue];
