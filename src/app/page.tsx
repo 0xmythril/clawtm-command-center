@@ -7,6 +7,8 @@ import { SoulCard } from "@/components/soul-card";
 import { CronTimeline } from "@/components/cron-timeline";
 import { FavoritesGrid } from "@/components/favorites-grid";
 import { AgentLevelBadge } from "@/components/agent-level";
+import { ChannelLinks } from "@/components/channel-links";
+import { ContactsSummary } from "@/components/contacts-summary";
 import { RefreshCw, Sparkles } from "lucide-react";
 import { useLocalStorage } from "@/lib/use-local-storage";
 import {
@@ -139,7 +141,18 @@ export default function DashboardPage() {
       {/* Header */}
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="text-3xl">🦞</span>
+          {/* Logo - uses /public/logo.png if exists, fallback to emoji */}
+          <img 
+            src="/logo.png" 
+            alt="ClawdTM" 
+            className="w-10 h-10 rounded-full"
+            onError={(e) => {
+              // Fallback to emoji if image doesn't exist
+              e.currentTarget.style.display = 'none';
+              e.currentTarget.nextElementSibling?.classList.remove('hidden');
+            }}
+          />
+          <span className="text-3xl hidden">🦞</span>
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold">ClawdTM</h1>
@@ -180,6 +193,12 @@ export default function DashboardPage() {
           </p>
         </div>
       )}
+
+      {/* Channel Quick Links */}
+      <ChannelLinks />
+
+      {/* Contacts & Access */}
+      <ContactsSummary />
 
       {/* Soul Card */}
       <SoulCard content={soul} loading={soulLoading} />

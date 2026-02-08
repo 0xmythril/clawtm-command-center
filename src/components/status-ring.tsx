@@ -38,12 +38,14 @@ export function StatusCard({
 }: StatusCardProps) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
 
+  const toggleCollapsed = () => setCollapsed(!collapsed);
+
   // Collapsed view - just icons and status
   if (collapsed) {
     return (
       <button
-        onClick={() => setCollapsed(false)}
-        className="w-full bg-zinc-900 rounded-xl border border-zinc-800 p-4 card-hover flex items-center justify-between"
+        onClick={toggleCollapsed}
+        className="w-full bg-zinc-900 rounded-xl border border-zinc-800 p-4 card-hover flex items-center justify-between cursor-pointer"
       >
         <div className="flex items-center gap-4">
           {/* Connection status */}
@@ -80,9 +82,12 @@ export function StatusCard({
     );
   }
 
-  // Expanded view
+  // Expanded view - entire card is clickable
   return (
-    <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-6 card-hover">
+    <div 
+      onClick={toggleCollapsed}
+      className="bg-zinc-900 rounded-xl border border-zinc-800 p-6 card-hover cursor-pointer"
+    >
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           {connected ? (
@@ -95,12 +100,7 @@ export function StatusCard({
             {connected ? "Connected" : "Disconnected"}
           </span>
         </div>
-        <button
-          onClick={() => setCollapsed(true)}
-          className="p-1 hover:bg-zinc-800 rounded transition-colors"
-        >
-          <ChevronUp className="w-5 h-5 text-zinc-500" />
-        </button>
+        <ChevronUp className="w-5 h-5 text-zinc-500" />
       </div>
       
       <div className="space-y-3 text-sm">

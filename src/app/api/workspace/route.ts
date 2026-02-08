@@ -12,6 +12,7 @@ const ALLOWED_FILES = [
   "HEARTBEAT.md",
   "TOOLS.md",
   "USER.md",
+  "PROPOSALS.md",
 ];
 
 export async function GET(request: NextRequest) {

@@ -134,3 +134,88 @@ export async function getGatewayHealth(): Promise<{ connected: boolean; uptime?:
     return { connected: false };
   }
 }
+
+// ─── Cron CRUD ───────────────────────────────────────────────
+
+export interface CronCreateParams {
+  name: string;
+  schedule: CronJob["schedule"];
+  payload: CronJob["payload"];
+  sessionTarget?: "main" | "isolated";
+  wakeMode?: "now" | "next-heartbeat";
+  enabled?: boolean;
+}
+
+export async function createCronJob(params: CronCreateParams): Promise<CronJob> {
+  return gatewayCall<CronJob>("cron.create", params);
+}
+
+export async function deleteCronJob(jobId: string): Promise<void> {
+  await gatewayCall("cron.delete", { id: jobId });
+}
+
+// ─── Skills management ──────────────────────────────────────
+
+export async function enableSkill(skillKey: string): Promise<void> {
+  await gatewayCall("skills.enable", { key: skillKey });
+}
+
+export async function disableSkill(skillKey: string): Promise<void> {
+  await gatewayCall("skills.disable", { key: skillKey });
+}
+
+export async function uninstallSkill(skillKey: string): Promise<void> {
+  await gatewayCall("skills.uninstall", { key: skillKey });
+}
+
+export async function installSkill(skillKey: string): Promise<void> {
+  await gatewayCall("skills.install", { key: skillKey });
+}
+
+// ─── Device management ───────────────────────────────────────
+
+export interface DevicePairingPendingRequest {
+  requestId: string;
+  deviceId: string;
+  publicKey?: string;
+  displayName?: string;
+  platform?: string;
+  clientId?: string;
+  clientMode?: string;
+  role?: string;
+  ts?: number;
+}
+
+export interface PairedDevice {
+  deviceId: string;
+  publicKey?: string;
+  displayName?: string;
+  platform?: string;
+  clientId?: string;
+  clientMode?: string;
+  role?: string;
+  createdAtMs?: number;
+  approvedAtMs?: number;
+  tokens?: Record<string, { role: string; scopes: string[]; createdAtMs: number }>;
+}
+
+export interface DeviceListResponse {
+  pending: DevicePairingPendingRequest[];
+  paired: PairedDevice[];
+}
+
+export async function listDevices(): Promise<DeviceListResponse> {
+  return gatewayCall<DeviceListResponse>("device.pair.list", {});
+}
+
+export async function approveDevice(requestId: string): Promise<void> {
+  await gatewayCall("device.pair.approve", { requestId });
+}
+
+export async function rejectDevice(requestId: string): Promise<void> {
+  await gatewayCall("device.pair.reject", { requestId });
+}
+
+export async function revokeDeviceToken(deviceId: string, role = "operator"): Promise<void> {
+  await gatewayCall("device.token.revoke", { deviceId, role });
+}

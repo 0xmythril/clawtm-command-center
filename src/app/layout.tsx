@@ -18,6 +18,12 @@ export const metadata: Metadata = {
   title: "ClawdTM Command Center",
   description: "Control center for your AI agent",
   manifest: "/manifest.json",
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+    ],
+    apple: "/favicon.svg",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",

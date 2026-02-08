@@ -7,7 +7,7 @@ const GATEWAY_TOKEN = process.env.GATEWAY_TOKEN || "";
 // Simple RPC call to gateway
 async function gatewayRequest(method: string, params: unknown = {}): Promise<unknown> {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(GATEWAY_URL);
+    const ws = new WebSocket(GATEWAY_URL, { headers: { origin: "http://localhost:3000" } });
     const timeout = setTimeout(() => {
       ws.close();
       reject(new Error("Gateway timeout"));

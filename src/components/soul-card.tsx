@@ -55,29 +55,38 @@ export function SoulCard({ content, loading }: SoulCardProps) {
       return { type: "p", text: line };
     }) || [];
 
+  const toggleExpanded = () => {
+    if (hasMore) {
+      setExpanded(!expanded);
+    }
+  };
+
   return (
-    <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-6 card-hover">
-      <div 
-        className="flex items-center justify-between cursor-pointer"
-        onClick={() => hasMore && setExpanded(!expanded)}
-      >
+    <div 
+      onClick={toggleExpanded}
+      className={`bg-zinc-900 rounded-xl border border-zinc-800 p-6 card-hover ${hasMore ? 'cursor-pointer' : ''}`}
+    >
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-lg">🦞</span>
           <h3 className="font-semibold">Soul</h3>
         </div>
         {hasMore && (
-          <button className="p-1 text-zinc-400 hover:text-zinc-200 transition-colors">
+          <div className="p-1 text-zinc-400">
             {expanded ? (
               <ChevronUp className="w-5 h-5" />
             ) : (
               <ChevronDown className="w-5 h-5" />
             )}
-          </button>
+          </div>
         )}
       </div>
       
       {expanded ? (
-        <div className="mt-4 space-y-2 text-sm text-zinc-300 leading-relaxed max-h-[60vh] overflow-y-auto">
+        <div 
+          className="mt-4 space-y-2 text-sm text-zinc-300 leading-relaxed max-h-[60vh] overflow-y-auto"
+          onClick={(e) => e.stopPropagation()} // Allow scrolling without collapsing
+        >
           {formattedContent.map((line, i) => {
             if (line.type === "h1") {
               return <h1 key={i} className="text-xl font-bold text-zinc-100 mt-4 first:mt-0">{line.text}</h1>;
