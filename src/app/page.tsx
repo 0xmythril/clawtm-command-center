@@ -233,6 +233,7 @@ export default function DashboardPage() {
               )}
               {uptimeStr || heartbeatTime ? <span>·</span> : null}
               <span className="flex items-center gap-1 text-zinc-600">
+                Powered by
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/logo-clawdTM-green.png" alt="" className="w-3 h-3 rounded-full opacity-60" />
                 ClawdTM
