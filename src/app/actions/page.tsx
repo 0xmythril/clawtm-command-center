@@ -482,41 +482,42 @@ export default function ActionsPage() {
         {/* SCHEDULED TAB (Cron Jobs) */}
         {/* ═══════════════════════════════════════════════════════════ */}
         <TabsContent value="scheduled" className="space-y-4">
-          {/* Next Wake Card + Create Button */}
-          <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Clock className="w-5 h-5 text-emerald-500" />
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">Next Wake</span>
-                    <div className="group relative">
-                      <Info className="w-3.5 h-3.5 text-zinc-500 cursor-help" />
-                      <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-48 p-2 bg-zinc-800 rounded-lg text-xs text-zinc-300 shadow-lg z-10">
-                        When the scheduler next wakes to run any enabled job.
-                      </div>
+          {/* Next Job Card */}
+          {(() => {
+            const nextJob = cronJobs
+              .filter((j) => j.enabled && j.state?.nextRunAtMs)
+              .sort((a, b) => (a.state?.nextRunAtMs || 0) - (b.state?.nextRunAtMs || 0))[0];
+            return (
+              <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Clock className="w-5 h-5 text-emerald-500 shrink-0" />
+                    <div className="min-w-0">
+                      <span className="text-xs text-zinc-500">Next Job</span>
+                      {nextJob ? (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-sm truncate">{nextJob.name}</span>
+                          <span className="text-xs text-zinc-400">
+                            {formatNextRun(nextJob.state!.nextRunAtMs!)}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="text-sm text-zinc-400">No jobs scheduled</div>
+                      )}
                     </div>
                   </div>
-                  <div className="text-sm text-zinc-400">
-                    {cronStatus?.nextWakeAtMs ? formatNextRun(cronStatus.nextWakeAtMs) : "No jobs scheduled"}
-                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => setShowCreateCron(true)}
+                    className="h-8 px-3 bg-emerald-500 hover:bg-emerald-600 text-white shrink-0"
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    New
+                  </Button>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Badge variant={cronStatus?.enabled ? "default" : "secondary"}>
-                  {cronStatus?.enabled ? "Active" : "Paused"}
-                </Badge>
-                <Button
-                  size="sm"
-                  onClick={() => setShowCreateCron(true)}
-                  className="h-8 px-3 bg-emerald-500 hover:bg-emerald-600 text-white"
-                >
-                  <Plus className="w-4 h-4 mr-1" />
-                  New
-                </Button>
-              </div>
-            </div>
-          </div>
+            );
+          })()}
 
           {/* Info banner */}
           <div className="flex items-start gap-2 text-xs text-zinc-500 bg-zinc-900/50 rounded-lg p-3 border border-zinc-800/50">
