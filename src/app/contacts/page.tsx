@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { Suspense, useEffect, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -23,8 +24,17 @@ import {
   Unlink,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
   X,
   Sparkles,
+  Radio,
+  ExternalLink,
+  LayoutDashboard,
+  Settings,
+  Plus,
+  Trash2,
+  ToggleLeft,
+  ToggleRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -32,9 +42,12 @@ import {
   approveDevice,
   rejectDevice,
   revokeDeviceToken,
+  getGatewayHealth,
   type PairedDevice,
   type DevicePairingPendingRequest,
 } from "@/lib/gateway-api";
+
+// ─── Types ──────────────────────────────────────────────────────────────
 
 interface AddressBookIdentity {
   channel: string;
@@ -83,36 +96,113 @@ interface DevicesData {
   paired: PairedDevice[];
 }
 
+interface ChannelInfo {
+  id: string;
+  name: string;
+  enabled: boolean;
+  deepLink?: string;
+  username?: string;
+  icon: string;
+  dmPolicy?: string;
+  groupPolicy?: string;
+  streamMode?: string;
+  groupCount?: number;
+  contactCount?: number;
+}
+
+interface GatewaySettings {
+  port?: number;
+  bind?: string;
+  mode?: string;
+  auth?: string;
+  tailscale?: { mode?: string; resetOnExit?: boolean };
+  controlUi?: { enabled?: boolean; allowedOrigins?: string[]; allowInsecureAuth?: boolean };
+}
+
+interface MessagesSettings {
+  ackReactionScope?: string;
+}
+
+// ─── Channel visual metadata ────────────────────────────────────────────
+
+const channelMeta: Record<string, { color: string; emoji: string }> = {
+  telegram: { color: "from-sky-500/20 to-blue-500/20", emoji: "✈️" },
+  discord: { color: "from-indigo-500/20 to-purple-500/20", emoji: "🎮" },
+  slack: { color: "from-green-500/20 to-emerald-500/20", emoji: "💬" },
+  whatsapp: { color: "from-green-500/20 to-lime-500/20", emoji: "📱" },
+  signal: { color: "from-blue-500/20 to-sky-500/20", emoji: "🔒" },
+  imessage: { color: "from-blue-500/20 to-cyan-500/20", emoji: "💬" },
+};
+
 function channelLabel(channel: string): string {
   return channel.charAt(0).toUpperCase() + channel.slice(1);
 }
 
+// ─── Main Page ──────────────────────────────────────────────────────────
+
 export default function ContactsPage() {
+  return (
+    <Suspense>
+      <ContactsPageInner />
+    </Suspense>
+  );
+}
+
+function ContactsPageInner() {
+  const searchParams = useSearchParams();
+  const initialTab = searchParams.get("tab") || "overview";
+
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // People state
   const [peopleSection, setPeopleSection] = useState<PeopleSectionResponse | null>(null);
+
+  // Groups state
   const [groups, setGroups] = useState<GroupEntry[]>([]);
   const [groupPolicy, setGroupPolicy] = useState<string>("");
+  const [groupNicknames, setGroupNicknames] = useState<Record<string, string>>({});
+  const [editingGroup, setEditingGroup] = useState<{ key: string; value: string } | null>(null);
+
+  // Devices state
   const [devices, setDevices] = useState<DevicesData>({ pending: [], paired: [] });
+
+  // Channels state
+  const [channels, setChannels] = useState<ChannelInfo[]>([]);
+  const [gatewaySettings, setGatewaySettings] = useState<GatewaySettings>({});
+  const [messagesSettings, setMessagesSettings] = useState<MessagesSettings>({});
+  const [gatewayConnected, setGatewayConnected] = useState(false);
+  const [gatewayUptime, setGatewayUptime] = useState<number | undefined>();
+  const [showGatewaySettings, setShowGatewaySettings] = useState(false);
+
+  // Shared state
   const [busy, setBusy] = useState<string | null>(null);
   const [expandedContactId, setExpandedContactId] = useState<string | null>(null);
+  const [expandedGroupKey, setExpandedGroupKey] = useState<string | null>(null);
   const [linkModalFor, setLinkModalFor] = useState<MergedContactEntry | null>(null);
   const [editingName, setEditingName] = useState<{ contactId: string; value: string } | null>(null);
   const [editingNotes, setEditingNotes] = useState<{ contactId: string; value: string } | null>(null);
   const [nameModalFor, setNameModalFor] = useState<{ channel: string; id: string } | null>(null);
-  const [groupNicknames, setGroupNicknames] = useState<Record<string, string>>({});
-  const [editingGroup, setEditingGroup] = useState<{ key: string; value: string } | null>(null);
+  const [showAddGroup, setShowAddGroup] = useState(false);
+  const [confirmRemoveGroup, setConfirmRemoveGroup] = useState<{ channel: string; groupId: string } | null>(null);
+
+  // ─── Data fetching ──────────────────────────────────────────────────
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      const [peopleRes, groupsRes, devicesRes] = await Promise.all([
+      const [peopleRes, groupsRes, devicesRes, channelsRes, health] = await Promise.all([
         fetch("/api/contacts?section=people"),
         fetch("/api/contacts?section=groups"),
         listDevices().catch(() => ({ pending: [], paired: [] })),
+        fetch("/api/channels"),
+        getGatewayHealth(),
       ]);
       const peopleData = await peopleRes.json();
       const groupsData = await groupsRes.json();
+      const channelsData = await channelsRes.json();
+
       setPeopleSection(
         peopleData.mergedContacts && peopleData.addressBook ? peopleData : null
       );
@@ -120,6 +210,11 @@ export default function ContactsPage() {
       setGroupPolicy(groupsData.groupPolicy || "allowlist");
       setGroupNicknames(groupsData.nicknames || {});
       setDevices(devicesRes);
+      setChannels(channelsData.channels || []);
+      setGatewaySettings(channelsData.gateway || {});
+      setMessagesSettings(channelsData.messages || {});
+      setGatewayConnected(health.connected);
+      setGatewayUptime(health.uptime);
     } catch (err) {
       console.error("Failed to refresh contacts:", err);
     } finally {
@@ -131,6 +226,8 @@ export default function ContactsPage() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // ─── Action handlers ────────────────────────────────────────────────
 
   const handleBlockUser = async (userId: string, ch = "telegram") => {
     setBusy(`block-${ch}-${userId}`);
@@ -247,6 +344,68 @@ export default function ContactsPage() {
       setEditingGroup(null);
     } catch (err) {
       console.error("Rename group failed:", err);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleUpdateGroupSettings = async (
+    channel: string,
+    groupId: string,
+    settings: Record<string, unknown>
+  ) => {
+    const key = `${channel}:${groupId}`;
+    setBusy(`group-settings-${key}`);
+    try {
+      await fetch("/api/contacts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update-group-settings", channel, groupId, settings }),
+      });
+      await refresh();
+    } catch (err) {
+      console.error("Update group settings failed:", err);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleAddGroup = async (channel: string, groupId: string, settings: Record<string, unknown>) => {
+    setBusy("add-group");
+    try {
+      const res = await fetch("/api/contacts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "add-group", channel, groupId, settings }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        console.error("Add group failed:", data.error);
+      } else {
+        setShowAddGroup(false);
+        await refresh();
+      }
+    } catch (err) {
+      console.error("Add group failed:", err);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleRemoveGroup = async (channel: string, groupId: string) => {
+    const key = `${channel}:${groupId}`;
+    setBusy(`remove-group-${key}`);
+    try {
+      await fetch("/api/contacts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "remove-group", channel, groupId }),
+      });
+      setConfirmRemoveGroup(null);
+      setExpandedGroupKey(null);
+      await refresh();
+    } catch (err) {
+      console.error("Remove group failed:", err);
     } finally {
       setBusy(null);
     }
@@ -378,6 +537,26 @@ export default function ContactsPage() {
     }
   };
 
+  // ─── Computed values ────────────────────────────────────────────────
+
+  const pendingPairingCount = peopleSection
+    ? Object.values(peopleSection.channelsPeople).reduce((n, ch) => n + (ch.pairingRequests?.length ?? 0), 0)
+    : 0;
+  const suggestionCount = peopleSection?.addressBook?.suggestions?.length ?? 0;
+  const contactCount = peopleSection?.mergedContacts?.length ?? 0;
+
+  function formatUptime(seconds?: number): string {
+    if (!seconds) return "—";
+    const m = Math.floor(seconds / 60);
+    const h = Math.floor(m / 60);
+    const d = Math.floor(h / 24);
+    if (d > 0) return `${d}d ${h % 24}h`;
+    if (h > 0) return `${h}h ${m % 60}m`;
+    return `${m}m`;
+  }
+
+  // ─── Render ─────────────────────────────────────────────────────────
+
   return (
     <div className="space-y-6">
       <header className="flex items-center justify-between gap-2">
@@ -389,9 +568,9 @@ export default function ContactsPage() {
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl font-bold truncate">Contacts & Access</h1>
+            <h1 className="text-xl sm:text-2xl font-bold truncate">Contacts</h1>
             <p className="text-xs sm:text-sm text-zinc-400 truncate">
-              People, groups, and devices
+              Channels, people, groups & devices
             </p>
           </div>
         </div>
@@ -404,22 +583,317 @@ export default function ContactsPage() {
         </button>
       </header>
 
-      <Tabs defaultValue="people" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3 bg-zinc-900">
-          <TabsTrigger value="people" className="data-[state=active]:bg-zinc-800 text-xs sm:text-sm px-1 sm:px-3">
-            <Users className="w-4 h-4 mr-1 sm:mr-2 shrink-0" />
-            <span className="truncate">People<span className="hidden sm:inline"> ({peopleSection?.mergedContacts?.length ?? 0})</span></span>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <TabsList className="grid w-full grid-cols-5 bg-zinc-900">
+          <TabsTrigger value="overview" className="data-[state=active]:bg-zinc-800 text-xs px-1">
+            <LayoutDashboard className="w-4 h-4 sm:mr-1 shrink-0" />
+            <span className="hidden sm:inline">Overview</span>
           </TabsTrigger>
-          <TabsTrigger value="groups" className="data-[state=active]:bg-zinc-800 text-xs sm:text-sm px-1 sm:px-3">
-            <MessageSquare className="w-4 h-4 mr-1 sm:mr-2 shrink-0" />
-            <span className="truncate">Groups<span className="hidden sm:inline"> ({groups.length})</span></span>
+          <TabsTrigger value="channels" className="data-[state=active]:bg-zinc-800 text-xs px-1">
+            <Radio className="w-4 h-4 sm:mr-1 shrink-0" />
+            <span className="hidden sm:inline">Channels</span>
           </TabsTrigger>
-          <TabsTrigger value="devices" className="data-[state=active]:bg-zinc-800 text-xs sm:text-sm px-1 sm:px-3">
-            <Smartphone className="w-4 h-4 mr-1 sm:mr-2 shrink-0" />
-            <span className="truncate">Devices<span className="hidden sm:inline"> ({devices.paired.length})</span></span>
+          <TabsTrigger value="people" className="data-[state=active]:bg-zinc-800 text-xs px-1">
+            <Users className="w-4 h-4 sm:mr-1 shrink-0" />
+            <span className="hidden sm:inline">People</span>
+          </TabsTrigger>
+          <TabsTrigger value="groups" className="data-[state=active]:bg-zinc-800 text-xs px-1">
+            <MessageSquare className="w-4 h-4 sm:mr-1 shrink-0" />
+            <span className="hidden sm:inline">Groups</span>
+          </TabsTrigger>
+          <TabsTrigger value="devices" className="data-[state=active]:bg-zinc-800 text-xs px-1">
+            <Smartphone className="w-4 h-4 sm:mr-1 shrink-0" />
+            <span className="hidden sm:inline">Devices</span>
           </TabsTrigger>
         </TabsList>
 
+        {/* ═══════════════════════════════════════════════════════════ */}
+        {/* OVERVIEW TAB */}
+        {/* ═══════════════════════════════════════════════════════════ */}
+        <TabsContent value="overview" className="space-y-3">
+          {loading ? (
+            <>
+              <Skeleton className="h-20 skeleton-shimmer rounded-xl" />
+              <Skeleton className="h-20 skeleton-shimmer rounded-xl" />
+              <Skeleton className="h-20 skeleton-shimmer rounded-xl" />
+            </>
+          ) : (
+            <>
+              {/* Channels summary */}
+              <button
+                type="button"
+                onClick={() => setActiveTab("channels")}
+                className="w-full text-left bg-zinc-900 rounded-xl border border-zinc-800 p-4 hover:bg-zinc-800/50 transition-colors"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Radio className="w-5 h-5 text-emerald-500 shrink-0" />
+                    <div className="min-w-0">
+                      <div className="font-medium text-sm">Channels</div>
+                      <div className="text-xs text-zinc-400 mt-0.5">
+                        {channels.length} active
+                        {gatewayConnected && (
+                          <span className="text-emerald-400"> · Gateway connected</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex -space-x-1">
+                      {channels.slice(0, 4).map((ch) => (
+                        <span
+                          key={ch.id}
+                          className="w-6 h-6 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs"
+                          title={ch.name}
+                        >
+                          {channelMeta[ch.icon]?.emoji || "📡"}
+                        </span>
+                      ))}
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-zinc-500" />
+                  </div>
+                </div>
+              </button>
+
+              {/* People summary */}
+              <button
+                type="button"
+                onClick={() => setActiveTab("people")}
+                className="w-full text-left bg-zinc-900 rounded-xl border border-zinc-800 p-4 hover:bg-zinc-800/50 transition-colors"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Users className="w-5 h-5 text-emerald-500 shrink-0" />
+                    <div className="min-w-0">
+                      <div className="font-medium text-sm">People</div>
+                      <div className="text-xs text-zinc-400 mt-0.5">
+                        {contactCount} contact{contactCount !== 1 ? "s" : ""}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {pendingPairingCount > 0 && (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-400">
+                        {pendingPairingCount} pending
+                      </span>
+                    )}
+                    {suggestionCount > 0 && (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-500/20 text-amber-400">
+                        {suggestionCount} suggestion{suggestionCount !== 1 ? "s" : ""}
+                      </span>
+                    )}
+                    <ChevronRight className="w-4 h-4 text-zinc-500" />
+                  </div>
+                </div>
+              </button>
+
+              {/* Groups summary */}
+              <button
+                type="button"
+                onClick={() => setActiveTab("groups")}
+                className="w-full text-left bg-zinc-900 rounded-xl border border-zinc-800 p-4 hover:bg-zinc-800/50 transition-colors"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <MessageSquare className="w-5 h-5 text-emerald-500 shrink-0" />
+                    <div className="min-w-0">
+                      <div className="font-medium text-sm">Groups</div>
+                      <div className="text-xs text-zinc-400 mt-0.5">
+                        {groups.length} group{groups.length !== 1 ? "s" : ""} · Policy: {groupPolicy}
+                      </div>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-zinc-500 shrink-0" />
+                </div>
+              </button>
+
+              {/* Devices summary */}
+              <button
+                type="button"
+                onClick={() => setActiveTab("devices")}
+                className="w-full text-left bg-zinc-900 rounded-xl border border-zinc-800 p-4 hover:bg-zinc-800/50 transition-colors"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Smartphone className="w-5 h-5 text-emerald-500 shrink-0" />
+                    <div className="min-w-0">
+                      <div className="font-medium text-sm">Devices</div>
+                      <div className="text-xs text-zinc-400 mt-0.5">
+                        {devices.paired.length} paired
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {devices.pending.length > 0 && (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-400">
+                        {devices.pending.length} pending
+                      </span>
+                    )}
+                    <ChevronRight className="w-4 h-4 text-zinc-500" />
+                  </div>
+                </div>
+              </button>
+            </>
+          )}
+        </TabsContent>
+
+        {/* ═══════════════════════════════════════════════════════════ */}
+        {/* CHANNELS TAB */}
+        {/* ═══════════════════════════════════════════════════════════ */}
+        <TabsContent value="channels" className="space-y-4">
+          {loading ? (
+            <>
+              <Skeleton className="h-32 skeleton-shimmer rounded-xl" />
+              <Skeleton className="h-32 skeleton-shimmer rounded-xl" />
+            </>
+          ) : (
+            <>
+              {/* Gateway status bar */}
+              <div className="flex items-center justify-between bg-zinc-900 rounded-xl border border-zinc-800 p-3">
+                <div className="flex items-center gap-2">
+                  <span className={cn(
+                    "w-2 h-2 rounded-full shrink-0",
+                    gatewayConnected ? "bg-emerald-500" : "bg-red-500"
+                  )} />
+                  <span className="text-sm font-medium">
+                    Gateway {gatewayConnected ? "Connected" : "Disconnected"}
+                  </span>
+                  {gatewayUptime && (
+                    <span className="text-xs text-zinc-500">
+                      · Up {formatUptime(gatewayUptime)}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={() => setShowGatewaySettings(!showGatewaySettings)}
+                  className="p-1.5 rounded-lg hover:bg-zinc-800 transition-colors text-zinc-400 hover:text-zinc-200"
+                  title="Gateway settings"
+                >
+                  <Settings className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Gateway settings panel (collapsed by default) */}
+              {showGatewaySettings && (
+                <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 space-y-3">
+                  <h4 className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Gateway Settings</h4>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <span className="text-zinc-500 text-xs">Port</span>
+                      <div className="text-zinc-300 font-mono text-xs">{gatewaySettings.port ?? "—"}</div>
+                    </div>
+                    <div>
+                      <span className="text-zinc-500 text-xs">Bind</span>
+                      <div className="text-zinc-300 font-mono text-xs">{gatewaySettings.bind ?? "—"}</div>
+                    </div>
+                    <div>
+                      <span className="text-zinc-500 text-xs">Auth</span>
+                      <div className="text-zinc-300 font-mono text-xs">{gatewaySettings.auth ?? "—"}</div>
+                    </div>
+                    <div>
+                      <span className="text-zinc-500 text-xs">Mode</span>
+                      <div className="text-zinc-300 font-mono text-xs">{gatewaySettings.mode ?? "—"}</div>
+                    </div>
+                  </div>
+                  {gatewaySettings.tailscale && (
+                    <div>
+                      <span className="text-zinc-500 text-xs">Tailscale</span>
+                      <div className="text-zinc-300 font-mono text-xs">
+                        {gatewaySettings.tailscale.mode ?? "—"} · Reset on exit: {String(gatewaySettings.tailscale.resetOnExit ?? false)}
+                      </div>
+                    </div>
+                  )}
+                  {messagesSettings.ackReactionScope && (
+                    <div>
+                      <span className="text-zinc-500 text-xs">Ack Reactions</span>
+                      <div className="text-zinc-300 font-mono text-xs">{messagesSettings.ackReactionScope}</div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Channel cards */}
+              {channels.length === 0 ? (
+                <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-8 text-center">
+                  <Radio className="w-10 h-10 text-zinc-700 mx-auto mb-3" />
+                  <p className="text-sm text-zinc-400 font-medium">No channels configured</p>
+                  <p className="text-xs text-zinc-500 mt-1">
+                    Add channels in openclaw.json to get started
+                  </p>
+                </div>
+              ) : (
+                channels.map((channel) => {
+                  const meta = channelMeta[channel.icon] || { color: "from-zinc-500/20 to-zinc-600/20", emoji: "📡" };
+                  return (
+                    <div
+                      key={channel.id}
+                      className={cn(
+                        "bg-gradient-to-br rounded-xl border border-zinc-800 p-4 space-y-3",
+                        meta.color
+                      )}
+                    >
+                      {/* Channel header */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl">{meta.emoji}</span>
+                          <div>
+                            <div className="font-medium">{channel.name}</div>
+                            {channel.username && (
+                              <div className="text-xs text-zinc-400">@{channel.username}</div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" title="Active" />
+                          {channel.deepLink && (
+                            <a
+                              href={channel.deepLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+                              title="Open"
+                            >
+                              <ExternalLink className="w-4 h-4 text-zinc-400" />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Channel stats */}
+                      <div className="flex flex-wrap gap-2">
+                        {channel.dmPolicy && (
+                          <Badge variant="secondary" className="text-xs">
+                            DM: {channel.dmPolicy}
+                          </Badge>
+                        )}
+                        {channel.groupPolicy && (
+                          <Badge variant="secondary" className="text-xs">
+                            Groups: {channel.groupPolicy}
+                          </Badge>
+                        )}
+                        {channel.streamMode && (
+                          <Badge variant="secondary" className="text-xs">
+                            Stream: {channel.streamMode}
+                          </Badge>
+                        )}
+                      </div>
+
+                      {/* Contact & group counts */}
+                      <div className="flex gap-4 text-xs text-zinc-400">
+                        <span>{channel.contactCount ?? 0} allowed contact{(channel.contactCount ?? 0) !== 1 ? "s" : ""}</span>
+                        <span>{channel.groupCount ?? 0} group{(channel.groupCount ?? 0) !== 1 ? "s" : ""}</span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </>
+          )}
+        </TabsContent>
+
+        {/* ═══════════════════════════════════════════════════════════ */}
+        {/* PEOPLE TAB */}
+        {/* ═══════════════════════════════════════════════════════════ */}
         <TabsContent value="people" className="space-y-4">
           {loading ? (
             <Skeleton className="h-24 skeleton-shimmer rounded-xl" />
@@ -665,7 +1139,6 @@ export default function ContactsPage() {
                                       Link another identity
                                     </Button>
                                   </div>
-                                  {/* Action buttons - moved here from collapsed view */}
                                   <div className="flex items-center gap-2 flex-wrap">
                                     <Button
                                       size="sm"
@@ -776,20 +1249,39 @@ export default function ContactsPage() {
           )}
         </TabsContent>
 
+        {/* ═══════════════════════════════════════════════════════════ */}
+        {/* GROUPS TAB */}
+        {/* ═══════════════════════════════════════════════════════════ */}
         <TabsContent value="groups" className="space-y-4">
           {loading ? (
             <Skeleton className="h-24 skeleton-shimmer rounded-xl" />
           ) : (
             <>
-              <div className="flex items-start gap-2 text-xs text-zinc-500 bg-zinc-900/50 rounded-lg p-3 border border-zinc-800/50">
-                <Info className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>
-                  Group policy: <strong className="text-zinc-400">{groupPolicy}</strong>. Groups are configured in openclaw.json.
-                </span>
+              {/* Header row with policy + add button */}
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-start gap-2 text-xs text-zinc-500 bg-zinc-900/50 rounded-lg p-3 border border-zinc-800/50 flex-1">
+                  <Info className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>
+                    Group policy: <strong className="text-zinc-400">{groupPolicy}</strong> · {groups.length} group{groups.length !== 1 ? "s" : ""}
+                  </span>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => setShowAddGroup(true)}
+                  className="h-9 px-3 bg-emerald-500 hover:bg-emerald-600 text-white shrink-0"
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  Add
+                </Button>
               </div>
+
               {groups.length === 0 ? (
-                <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 sm:p-5 text-center text-zinc-400 text-sm">
-                  No groups configured
+                <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-6 sm:p-8 text-center">
+                  <MessageSquare className="w-10 h-10 text-zinc-700 mx-auto mb-3" />
+                  <p className="text-sm text-zinc-400 font-medium">No groups configured</p>
+                  <p className="text-xs text-zinc-500 mt-1">
+                    Add a group to allow the bot to participate in group chats.
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -797,62 +1289,176 @@ export default function ContactsPage() {
                     const nickKey = `${g.channel}:${g.groupId}`;
                     const nickname = groupNicknames[nickKey];
                     const isEditing = editingGroup?.key === nickKey;
+                    const isExpanded = expandedGroupKey === nickKey;
+                    const requireMention = g.settings?.requireMention;
+
                     return (
                       <div
                         key={`${g.channel}-${g.groupId}`}
-                        className="bg-zinc-900 rounded-xl border border-zinc-800 p-4"
+                        className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden"
                       >
-                        <div className="flex items-center gap-3">
-                          <span className="text-xl">💬</span>
-                          <div className="min-w-0 flex-1">
-                            {isEditing ? (
-                              <input
-                                type="text"
-                                value={editingGroup.value}
-                                onChange={(e) =>
-                                  setEditingGroup({ ...editingGroup, value: e.target.value })
-                                }
-                                onBlur={() => {
-                                  handleRenameGroup(g.channel, g.groupId, editingGroup.value);
-                                }}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") {
-                                    handleRenameGroup(g.channel, g.groupId, editingGroup.value);
+                        {/* Group header row */}
+                        <div
+                          className="p-3 sm:p-4 cursor-pointer"
+                          onClick={() => setExpandedGroupKey(isExpanded ? null : nickKey)}
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="text-xl shrink-0">💬</span>
+                            <div className="min-w-0 flex-1">
+                              {isEditing ? (
+                                <input
+                                  type="text"
+                                  value={editingGroup.value}
+                                  onChange={(e) =>
+                                    setEditingGroup({ ...editingGroup, value: e.target.value })
                                   }
-                                  if (e.key === "Escape") setEditingGroup(null);
-                                }}
-                                autoFocus
-                                className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-sm w-full max-w-[220px]"
-                              />
-                            ) : (
-                              <div className="font-medium text-sm truncate">
-                                {nickname || g.groupId}
-                                {nickname && (
-                                  <span className="text-zinc-600 font-mono text-xs ml-1.5">
-                                    {g.groupId}
+                                  onBlur={() => {
+                                    handleRenameGroup(g.channel, g.groupId, editingGroup.value);
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      handleRenameGroup(g.channel, g.groupId, editingGroup.value);
+                                    }
+                                    if (e.key === "Escape") setEditingGroup(null);
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  autoFocus
+                                  className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-sm w-full max-w-[220px]"
+                                />
+                              ) : (
+                                <div className="font-medium text-sm truncate">
+                                  {nickname || g.groupId}
+                                  {nickname && (
+                                    <span className="text-zinc-600 font-mono text-xs ml-1.5">
+                                      {g.groupId}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                              <div className="flex items-center gap-2 mt-0.5 text-xs text-zinc-500">
+                                <Badge variant="secondary" className="text-xs">
+                                  {channelLabel(g.channel)}
+                                </Badge>
+                                {requireMention !== undefined && (
+                                  <span className={cn(
+                                    "flex items-center gap-1",
+                                    requireMention ? "text-emerald-400" : "text-zinc-500"
+                                  )}>
+                                    {requireMention ? (
+                                      <ToggleRight className="w-3 h-3" />
+                                    ) : (
+                                      <ToggleLeft className="w-3 h-3" />
+                                    )}
+                                    mention {requireMention ? "required" : "not required"}
                                   </span>
                                 )}
                               </div>
-                            )}
-                            <div className="text-xs text-zinc-500">
-                              {g.channel}
-                              {g.settings?.requireMention !== undefined && (
-                                <> · Require mention: {String(g.settings.requireMention)}</>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingGroup({ key: nickKey, value: nickname || "" });
+                                }}
+                                className="p-1.5 rounded-lg hover:bg-zinc-800 transition-colors text-zinc-500 hover:text-zinc-300"
+                                title="Rename group"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              {isExpanded ? (
+                                <ChevronUp className="w-4 h-4 text-zinc-500" />
+                              ) : (
+                                <ChevronDown className="w-4 h-4 text-zinc-500" />
                               )}
                             </div>
                           </div>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-8 w-8 p-0 shrink-0"
-                            onClick={() =>
-                              setEditingGroup({ key: nickKey, value: nickname || "" })
-                            }
-                            disabled={busy !== null}
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </Button>
                         </div>
+
+                        {/* Expanded settings */}
+                        {isExpanded && (
+                          <div
+                            className="border-t border-zinc-800 p-4 space-y-4 bg-zinc-900/50"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {/* Require Mention toggle */}
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <div className="text-sm font-medium text-zinc-300">Require Mention</div>
+                                <p className="text-xs text-zinc-500 mt-0.5">
+                                  Bot only responds when @mentioned in this group
+                                </p>
+                              </div>
+                              <button
+                                onClick={() =>
+                                  handleUpdateGroupSettings(g.channel, g.groupId, {
+                                    requireMention: !requireMention,
+                                  })
+                                }
+                                disabled={busy === `group-settings-${nickKey}`}
+                                className={cn(
+                                  "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
+                                  requireMention ? "bg-emerald-500" : "bg-zinc-700"
+                                )}
+                              >
+                                {busy === `group-settings-${nickKey}` ? (
+                                  <Loader2 className="w-4 h-4 animate-spin mx-auto text-white" />
+                                ) : (
+                                  <span
+                                    className={cn(
+                                      "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
+                                      requireMention ? "translate-x-6" : "translate-x-1"
+                                    )}
+                                  />
+                                )}
+                              </button>
+                            </div>
+
+                            {/* Other settings (read from config) */}
+                            {Object.entries(g.settings).filter(([k]) => k !== "requireMention").length > 0 && (
+                              <div>
+                                <div className="text-xs font-medium text-zinc-500 mb-2">Other Settings</div>
+                                <div className="space-y-1.5">
+                                  {Object.entries(g.settings)
+                                    .filter(([k]) => k !== "requireMention")
+                                    .map(([key, value]) => (
+                                      <div key={key} className="flex items-center justify-between text-xs">
+                                        <span className="text-zinc-400">{key}</span>
+                                        <span className="text-zinc-300 font-mono">{JSON.stringify(value)}</span>
+                                      </div>
+                                    ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Group ID info */}
+                            <div className="pt-2 border-t border-zinc-800">
+                              <div className="flex items-center justify-between text-xs mb-3">
+                                <span className="text-zinc-500">Group ID</span>
+                                <code className="text-zinc-400 bg-zinc-800 px-2 py-0.5 rounded font-mono">
+                                  {g.groupId}
+                                </code>
+                              </div>
+                              <div className="flex items-center justify-between text-xs mb-3">
+                                <span className="text-zinc-500">Channel</span>
+                                <span className="text-zinc-400">{channelLabel(g.channel)}</span>
+                              </div>
+                            </div>
+
+                            {/* Remove group */}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-red-400 border-red-500/30 hover:bg-red-500/10 hover:text-red-300"
+                              onClick={() =>
+                                setConfirmRemoveGroup({ channel: g.channel, groupId: g.groupId })
+                              }
+                              disabled={busy !== null}
+                            >
+                              <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                              Remove Group
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -862,6 +1468,9 @@ export default function ContactsPage() {
           )}
         </TabsContent>
 
+        {/* ═══════════════════════════════════════════════════════════ */}
+        {/* DEVICES TAB */}
+        {/* ═══════════════════════════════════════════════════════════ */}
         <TabsContent value="devices" className="space-y-4">
           {loading ? (
             <Skeleton className="h-24 skeleton-shimmer rounded-xl" />
@@ -967,6 +1576,8 @@ export default function ContactsPage() {
         </TabsContent>
       </Tabs>
 
+      {/* ─── Modals ───────────────────────────────────────────────────── */}
+
       {linkModalFor?.contactId && peopleSection && (
         <LinkIdentityModal
           contact={linkModalFor}
@@ -988,6 +1599,52 @@ export default function ContactsPage() {
           busy={busy}
           channelLabel={channelLabel}
         />
+      )}
+
+      {showAddGroup && (
+        <AddGroupModal
+          channels={channels}
+          onClose={() => setShowAddGroup(false)}
+          onAdd={handleAddGroup}
+          busy={busy}
+          channelLabel={channelLabel}
+        />
+      )}
+
+      {confirmRemoveGroup && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-zinc-900 rounded-t-2xl sm:rounded-xl border border-zinc-800 w-full max-w-sm p-4 sm:p-5">
+            <div className="w-10 h-1 bg-zinc-700 rounded-full mx-auto mb-4 sm:hidden" />
+            <h3 className="font-semibold text-lg mb-2">Remove Group</h3>
+            <p className="text-sm text-zinc-400 mb-2">
+              Remove group{" "}
+              <strong className="text-zinc-200 font-mono">{confirmRemoveGroup.groupId}</strong>{" "}
+              from {channelLabel(confirmRemoveGroup.channel)}?
+            </p>
+            <p className="text-xs text-zinc-500 mb-6">
+              The bot will no longer respond in this group. This modifies openclaw.json.
+            </p>
+            <div className="flex gap-3">
+              <Button variant="outline" className="flex-1" onClick={() => setConfirmRemoveGroup(null)}>
+                Cancel
+              </Button>
+              <Button
+                className="flex-1 bg-red-500 hover:bg-red-600 text-white"
+                onClick={() => handleRemoveGroup(confirmRemoveGroup.channel, confirmRemoveGroup.groupId)}
+                disabled={busy === `remove-group-${confirmRemoveGroup.channel}:${confirmRemoveGroup.groupId}`}
+              >
+                {busy === `remove-group-${confirmRemoveGroup.channel}:${confirmRemoveGroup.groupId}` ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4 mr-1" />
+                    Remove
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -1149,6 +1806,121 @@ function LinkIdentityModal({
             </ul>
           )}
         </ScrollArea>
+      </div>
+    </div>
+  );
+}
+
+// ─── Add Group Modal ───────────────────────────────────────────────────────
+function AddGroupModal({
+  channels,
+  onClose,
+  onAdd,
+  busy,
+  channelLabel,
+}: {
+  channels: ChannelInfo[];
+  onClose: () => void;
+  onAdd: (channel: string, groupId: string, settings: Record<string, unknown>) => Promise<void>;
+  busy: string | null;
+  channelLabel: (ch: string) => string;
+}) {
+  const [channel, setChannel] = useState(channels[0]?.id || "");
+  const [groupId, setGroupId] = useState("");
+  const [requireMention, setRequireMention] = useState(true);
+  const isBusy = busy === "add-group";
+
+  const handleSubmit = async () => {
+    const trimmed = groupId.trim();
+    if (!trimmed || !channel) return;
+    await onAdd(channel, trimmed, { requireMention });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-zinc-900 rounded-t-2xl sm:rounded-xl border border-zinc-800 w-full max-w-sm">
+        <div className="w-10 h-1 bg-zinc-700 rounded-full mx-auto mt-2 sm:hidden" />
+        <div className="flex items-center justify-between p-4 border-b border-zinc-800">
+          <h3 className="font-semibold text-lg">Add Group</h3>
+          <button onClick={onClose} className="p-1 rounded hover:bg-zinc-800 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-4">
+          {/* Channel selector */}
+          <div>
+            <label className="text-sm font-medium text-zinc-300 mb-1 block">Channel</label>
+            <select
+              value={channel}
+              onChange={(e) => setChannel(e.target.value)}
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+            >
+              {channels.map((ch) => (
+                <option key={ch.id} value={ch.id}>
+                  {channelLabel(ch.id)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Group ID */}
+          <div>
+            <label className="text-sm font-medium text-zinc-300 mb-1 block">Group ID</label>
+            <input
+              type="text"
+              value={groupId}
+              onChange={(e) => setGroupId(e.target.value)}
+              placeholder="e.g. -5159692794"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSubmit();
+                if (e.key === "Escape") onClose();
+              }}
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+            />
+            <p className="text-xs text-zinc-500 mt-1">
+              The numeric group/chat ID from the platform
+            </p>
+          </div>
+
+          {/* Require Mention toggle */}
+          <div className="flex items-center justify-between bg-zinc-800/50 rounded-lg p-3">
+            <div>
+              <div className="text-sm font-medium text-zinc-300">Require Mention</div>
+              <p className="text-xs text-zinc-500 mt-0.5">
+                Only respond when @mentioned
+              </p>
+            </div>
+            <button
+              onClick={() => setRequireMention(!requireMention)}
+              className={cn(
+                "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
+                requireMention ? "bg-emerald-500" : "bg-zinc-700"
+              )}
+            >
+              <span
+                className={cn(
+                  "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
+                  requireMention ? "translate-x-6" : "translate-x-1"
+                )}
+              />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-4 border-t border-zinc-800 flex gap-3">
+          <Button variant="outline" className="flex-1" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white"
+            onClick={handleSubmit}
+            disabled={!groupId.trim() || !channel || isBusy}
+          >
+            {isBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Add Group"}
+          </Button>
+        </div>
       </div>
     </div>
   );

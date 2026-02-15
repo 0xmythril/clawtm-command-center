@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function ConfigPage() {
-  redirect("/skills");
+  redirect("/memory?tab=skills");
 }

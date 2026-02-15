@@ -644,6 +644,102 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
+    // ─── Group settings actions ─────────────────────────────────────────
+    if (action === "update-group-settings") {
+      const { channel: ch, groupId: gid, settings: newSettings } = body as {
+        channel?: string;
+        groupId?: string;
+        settings?: Record<string, unknown>;
+      };
+      if (!ch || !gid || !newSettings || typeof newSettings !== "object") {
+        return NextResponse.json(
+          { error: "channel, groupId, and settings required" },
+          { status: 400 }
+        );
+      }
+      const raw = await fs.readFile(OPENCLAW_CONFIG, "utf-8");
+      const config = JSON.parse(raw);
+      if (!config.channels?.[ch]?.groups?.[gid]) {
+        return NextResponse.json({ error: "Group not found" }, { status: 404 });
+      }
+      // Merge new settings into existing
+      const existing = config.channels[ch].groups[gid];
+      config.channels[ch].groups[gid] = { ...existing, ...newSettings };
+      // Atomic write
+      const tmpPath = `${OPENCLAW_CONFIG}.${randomBytes(8).toString("hex")}.tmp`;
+      await fs.writeFile(tmpPath, JSON.stringify(config, null, 2), "utf-8");
+      await fs.rename(tmpPath, OPENCLAW_CONFIG);
+      return NextResponse.json({ ok: true, settings: config.channels[ch].groups[gid] });
+    }
+
+    if (action === "add-group") {
+      const { channel: ch, groupId: gid, settings: newSettings } = body as {
+        channel?: string;
+        groupId?: string;
+        settings?: Record<string, unknown>;
+      };
+      if (!ch || !gid) {
+        return NextResponse.json(
+          { error: "channel and groupId required" },
+          { status: 400 }
+        );
+      }
+      const raw = await fs.readFile(OPENCLAW_CONFIG, "utf-8");
+      const config = JSON.parse(raw);
+      if (!config.channels?.[ch]) {
+        return NextResponse.json(
+          { error: `Channel '${ch}' not found in config` },
+          { status: 404 }
+        );
+      }
+      if (!config.channels[ch].groups) {
+        config.channels[ch].groups = {};
+      }
+      if (config.channels[ch].groups[gid]) {
+        return NextResponse.json(
+          { error: "Group already exists" },
+          { status: 409 }
+        );
+      }
+      config.channels[ch].groups[gid] = newSettings || { requireMention: true };
+      // Atomic write
+      const tmpPath = `${OPENCLAW_CONFIG}.${randomBytes(8).toString("hex")}.tmp`;
+      await fs.writeFile(tmpPath, JSON.stringify(config, null, 2), "utf-8");
+      await fs.rename(tmpPath, OPENCLAW_CONFIG);
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "remove-group") {
+      const { channel: ch, groupId: gid } = body as {
+        channel?: string;
+        groupId?: string;
+      };
+      if (!ch || !gid) {
+        return NextResponse.json(
+          { error: "channel and groupId required" },
+          { status: 400 }
+        );
+      }
+      const raw = await fs.readFile(OPENCLAW_CONFIG, "utf-8");
+      const config = JSON.parse(raw);
+      if (!config.channels?.[ch]?.groups?.[gid]) {
+        return NextResponse.json({ error: "Group not found" }, { status: 404 });
+      }
+      delete config.channels[ch].groups[gid];
+      // Atomic write
+      const tmpPath = `${OPENCLAW_CONFIG}.${randomBytes(8).toString("hex")}.tmp`;
+      await fs.writeFile(tmpPath, JSON.stringify(config, null, 2), "utf-8");
+      await fs.rename(tmpPath, OPENCLAW_CONFIG);
+      // Also remove nickname if exists
+      const nicknames = await readGroupNicknames();
+      const key = `${ch}:${gid}`;
+      if (nicknames[key]) {
+        delete nicknames[key];
+        await writeGroupNicknames(nicknames);
+      }
+      return NextResponse.json({ ok: true });
+    }
+
     // ─── Group nickname actions ──────────────────────────────────────────
     if (action === "rename-group") {
       const { channel: ch, groupId: gid, displayName: name } = body as {

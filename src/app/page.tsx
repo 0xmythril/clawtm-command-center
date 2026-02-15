@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { StatusRing } from "@/components/status-ring";
-import { StatusCard } from "@/components/status-ring";
+import { StatusCard, type SystemHealth } from "@/components/status-ring";
 import { CronTimeline } from "@/components/cron-timeline";
 import { AgentLevelBadge } from "@/components/agent-level";
 import { ChannelLinks } from "@/components/channel-links";
@@ -63,21 +63,24 @@ export default function DashboardPage() {
   } | undefined>();
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      const [health, jobs, heartbeat] = await Promise.all([
+      const [health, jobs, heartbeat, healthData] = await Promise.all([
         getGatewayHealth(),
         getCronJobs().catch(() => []),
         getLastHeartbeat(),
+        fetch("/api/system-health").then((r) => r.json()).catch(() => null),
       ]);
       
       setConnected(health.connected);
       setUptime(health.uptime);
       setCronJobs(jobs);
       setLastHeartbeat(heartbeat);
+      if (healthData && !healthData.error) setSystemHealth(healthData);
     } catch (err) {
       console.error("Refresh failed:", err);
       setConnected(false);
@@ -261,6 +264,7 @@ export default function DashboardPage() {
         heartbeatText={lastHeartbeat?.text || heartbeatMd}
         heartbeatSource={lastHeartbeat?.source}
         agentInfo={agentInfo}
+        systemHealth={systemHealth}
         defaultCollapsed={true}
       />
 

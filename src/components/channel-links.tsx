@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ExternalLink, Loader2, MessageCircle, Radio } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ChevronRight, Loader2, Radio } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface ChannelInfo {
@@ -24,6 +25,7 @@ const channelMeta: Record<string, { color: string; emoji: string }> = {
 };
 
 export function ChannelLinks() {
+  const router = useRouter();
   const [channels, setChannels] = useState<ChannelInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -56,84 +58,47 @@ export function ChannelLinks() {
     );
   }
 
-  if (channels.length === 0) {
-    return (
-      <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 sm:p-5 card-hover">
-        <div className="flex items-center gap-2 mb-3">
-          <Radio className="w-5 h-5 text-emerald-500" />
-          <h3 className="font-semibold">Channels</h3>
-        </div>
-        <p className="text-sm text-zinc-400">No channels configured</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 sm:p-5 card-hover">
-      <div className="flex items-center gap-2 mb-3">
-        <Radio className="w-5 h-5 text-emerald-500" />
-        <h3 className="font-semibold">Message Me On</h3>
-      </div>
-      <div className={cn(
-        "gap-3",
-        channels.length === 1 ? "flex" : "grid grid-cols-2"
-      )}>
-        {channels.map((channel) => {
-          const meta = channelMeta[channel.icon] || {
-            color: "from-zinc-500/20 to-zinc-600/20",
-            emoji: "📡",
-          };
-          const isSingle = channels.length === 1;
-
-          if (channel.deepLink) {
-            return (
-              <a
-                key={channel.id}
-                href={channel.deepLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={cn(
-                  "flex items-center gap-3 rounded-xl border transition-all",
-                  "bg-gradient-to-br border-zinc-800 hover:border-zinc-700",
-                  "btn-press",
-                  isSingle ? "p-3 w-full" : "p-4",
-                  meta.color
-                )}
-              >
-                <span className={isSingle ? "text-xl" : "text-2xl"}>{meta.emoji}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium text-sm">{channel.name}</div>
-                  {channel.username && (
-                    <div className="text-xs text-zinc-400 truncate">
-                      @{channel.username}
-                    </div>
-                  )}
-                </div>
-                <ExternalLink className="w-4 h-4 text-zinc-500 shrink-0" />
-              </a>
-            );
-          }
-
-          return (
-            <div
-              key={channel.id}
-              className={cn(
-                "flex items-center gap-3 rounded-xl border",
-                "bg-gradient-to-br border-zinc-800",
-                isSingle ? "p-3 w-full" : "p-4",
-                meta.color
-              )}
-            >
-              <span className={isSingle ? "text-xl" : "text-2xl"}>{meta.emoji}</span>
-              <div className="flex-1 min-w-0">
-                <div className="font-medium text-sm">{channel.name}</div>
-                <div className="text-xs text-zinc-500">Active</div>
-              </div>
-              <MessageCircle className="w-4 h-4 text-zinc-500 shrink-0" />
+    <button
+      type="button"
+      onClick={() => router.push("/contacts?tab=channels")}
+      className={cn(
+        "w-full text-left bg-zinc-900 rounded-xl border border-zinc-800 p-4 sm:p-5 card-hover",
+        "transition-colors"
+      )}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <Radio className="w-5 h-5 text-emerald-500 shrink-0" />
+          <div className="min-w-0">
+            <h3 className="font-semibold">Channels</h3>
+            <p className="text-sm text-zinc-400 mt-0.5">
+              {channels.length === 0
+                ? "No channels configured"
+                : `${channels.length} active`}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {channels.length > 0 && (
+            <div className="flex -space-x-1.5">
+              {channels.slice(0, 4).map((ch) => {
+                const meta = channelMeta[ch.icon] || { emoji: "📡" };
+                return (
+                  <span
+                    key={ch.id}
+                    className="w-7 h-7 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-sm"
+                    title={ch.name}
+                  >
+                    {meta.emoji}
+                  </span>
+                );
+              })}
             </div>
-          );
-        })}
+          )}
+          <ChevronRight className="w-5 h-5 text-zinc-500" />
+        </div>
       </div>
-    </div>
+    </button>
   );
 }

@@ -219,3 +219,68 @@ export async function rejectDevice(requestId: string): Promise<void> {
 export async function revokeDeviceToken(deviceId: string, role = "operator"): Promise<void> {
   await gatewayCall("device.token.revoke", { deviceId, role });
 }
+
+// ─── Session management ──────────────────────────────────────
+
+export interface SessionListEntry {
+  key: string;
+  type: string;
+  model?: string;
+  tokenCount?: number;
+  turnCount?: number;
+  updatedAt?: number;
+  createdAt?: number;
+  active?: boolean;
+}
+
+export interface SessionStatus {
+  key: string;
+  active: boolean;
+  model?: string;
+  tokenCount?: number;
+  turnCount?: number;
+  updatedAt?: number;
+}
+
+export interface SessionHistoryEntry {
+  role: string;
+  content?: string;
+  ts?: number;
+  tokenCount?: number;
+}
+
+export async function listSessions(): Promise<SessionListEntry[]> {
+  try {
+    return await gatewayCall<SessionListEntry[]>("sessions_list", {});
+  } catch {
+    // Gateway method may not be available, fall back to API route
+    const res = await fetch("/api/sessions");
+    const data = await res.json();
+    return data.sessions || [];
+  }
+}
+
+export async function getSessionStatus(sessionId: string): Promise<SessionStatus | null> {
+  try {
+    return await gatewayCall<SessionStatus>("session_status", { sessionId });
+  } catch {
+    return null;
+  }
+}
+
+export async function getSessionHistory(
+  sessionId: string,
+  limit = 20
+): Promise<SessionHistoryEntry[]> {
+  try {
+    return await gatewayCall<SessionHistoryEntry[]>("sessions_history", {
+      sessionId,
+      limit,
+    });
+  } catch {
+    // Fall back to API route
+    const res = await fetch(`/api/sessions?id=${encodeURIComponent(sessionId)}&limit=${limit}`);
+    const data = await res.json();
+    return data.history || [];
+  }
+}

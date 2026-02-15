@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Heart, ChevronDown, ChevronUp, Wifi, WifiOff, Cpu, Bot } from "lucide-react";
+import { Heart, ChevronDown, ChevronUp, Wifi, WifiOff, Cpu, Bot, HardDrive, Activity, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MarkdownContent } from "@/components/markdown-content";
 
@@ -32,6 +32,24 @@ interface AgentInfo {
   description?: string;
 }
 
+export interface SystemHealth {
+  system: {
+    memoryUsedMb: number;
+    memoryTotalMb: number;
+    memoryPercent: number;
+    loadAvg: number[];
+    diskUsedMb: number;
+  };
+  sessions: {
+    total: number;
+    active: number;
+  };
+  agent: {
+    model: string;
+    maxConcurrent: number;
+  };
+}
+
 interface StatusCardProps {
   connected: boolean;
   uptime?: string;
@@ -39,6 +57,7 @@ interface StatusCardProps {
   heartbeatText?: string;
   heartbeatSource?: string;
   agentInfo?: AgentInfo;
+  systemHealth?: SystemHealth | null;
   defaultCollapsed?: boolean;
 }
 
@@ -49,6 +68,7 @@ export function StatusCard({
   heartbeatText,
   heartbeatSource,
   agentInfo,
+  systemHealth,
   defaultCollapsed = false 
 }: StatusCardProps) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
@@ -199,6 +219,76 @@ export function StatusCard({
           <p className="text-xs text-zinc-500 italic pt-2 border-t border-zinc-800">
             No active instructions.
           </p>
+        )}
+
+        {/* System Health Section */}
+        {systemHealth && (
+          <div className="pt-3 mt-3 border-t border-zinc-800">
+            <div className="flex items-center gap-2 mb-3">
+              <Activity className="w-3.5 h-3.5 text-zinc-500" />
+              <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider">System</span>
+            </div>
+            <div className="space-y-2.5">
+              {/* Memory */}
+              <div className="flex items-center gap-2 text-xs">
+                <Cpu className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                <span className="text-zinc-400 w-14 shrink-0">Memory</span>
+                <div className="flex-1 h-2 bg-zinc-800 rounded-full overflow-hidden">
+                  <div
+                    className={cn(
+                      "h-full rounded-full transition-all",
+                      systemHealth.system.memoryPercent < 60
+                        ? "bg-emerald-500"
+                        : systemHealth.system.memoryPercent < 80
+                          ? "bg-yellow-500"
+                          : "bg-red-500"
+                    )}
+                    style={{ width: `${Math.min(100, systemHealth.system.memoryPercent)}%` }}
+                  />
+                </div>
+                <span className="text-zinc-500 font-mono shrink-0 w-28 text-right text-[11px]">
+                  {systemHealth.system.memoryPercent}% ({(systemHealth.system.memoryUsedMb / 1024).toFixed(1)} / {(systemHealth.system.memoryTotalMb / 1024).toFixed(1)} GB)
+                </span>
+              </div>
+
+              {/* Load Average */}
+              <div className="flex items-center gap-2 text-xs">
+                <Activity className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                <span className="text-zinc-400 w-14 shrink-0">Load</span>
+                <span className="text-zinc-300 font-mono">
+                  {systemHealth.system.loadAvg.map((v) => v.toFixed(2)).join(" / ")}
+                </span>
+              </div>
+
+              {/* Disk */}
+              <div className="flex items-center gap-2 text-xs">
+                <HardDrive className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                <span className="text-zinc-400 w-14 shrink-0">Disk</span>
+                <span className="text-zinc-300 font-mono">
+                  {systemHealth.system.diskUsedMb >= 1024
+                    ? `${(systemHealth.system.diskUsedMb / 1024).toFixed(1)} GB`
+                    : `${systemHealth.system.diskUsedMb} MB`} used
+                </span>
+                <span className="text-zinc-600 text-[11px]">~/.openclaw/</span>
+              </div>
+
+              {/* Sessions */}
+              <div className="flex items-center gap-2 text-xs">
+                <Users className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                <span className="text-zinc-400 w-14 shrink-0">Sessions</span>
+                <span className="text-zinc-300 font-mono">
+                  {systemHealth.sessions.total} total
+                </span>
+                <span className="text-zinc-500">·</span>
+                <span className={cn(
+                  "font-mono",
+                  systemHealth.sessions.active > 0 ? "text-emerald-400" : "text-zinc-500"
+                )}>
+                  {systemHealth.sessions.active} active
+                </span>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

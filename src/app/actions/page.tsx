@@ -9,7 +9,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Play, Pause, RefreshCw, Clock, Loader2, Info, CheckCircle, XCircle,
   AlertCircle, FileCode, Star, Zap, ChevronDown, ChevronUp, X, Plus,
-  Trash2, CalendarClock, ScrollText, Eraser, Terminal,
+  Trash2, CalendarClock, ScrollText, Eraser, Terminal, Radio, Search,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocalStorage } from "@/lib/use-local-storage";
@@ -200,6 +201,73 @@ const SCHEDULE_PRESETS = [
 ] as const;
 
 // ─────────────────────────────────────────────────────────────
+// Session types (for Sessions tab)
+// ─────────────────────────────────────────────────────────────
+
+interface SessionEntry {
+  key: string;
+  label: string;
+  type: "main" | "channel" | "cron" | "subagent" | "unknown";
+  channel?: string;
+  updatedAt: number;
+  createdAt: number;
+  tokenCount: number;
+  turnCount: number;
+  model?: string;
+  active: boolean;
+  contactName?: string;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Activity log types (for Activity tab - server-side logs)
+// ─────────────────────────────────────────────────────────────
+
+interface ActivityLogEntry {
+  ts: number;
+  type: "cron" | "session";
+  source: string;
+  summary: string;
+  status?: string;
+  durationMs?: number;
+  sessionKey?: string;
+}
+
+function formatActivityTime(ts: number): string {
+  const now = Date.now();
+  const diff = now - ts;
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  const date = new Date(ts);
+  const time = date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+  const dayPart = date.toLocaleDateString("en-US", { day: "numeric", month: "short" });
+
+  if (days === 0) {
+    if (minutes < 1) return `Just now`;
+    if (minutes < 60) return `${minutes}m ago · ${time}`;
+    return `${hours}h ago · ${time}`;
+  }
+  if (days === 1) return `Yesterday · ${time}`;
+  return `${dayPart} · ${time}`;
+}
+
+function formatSessionAge(ts: number): string {
+  const diff = Date.now() - ts;
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  return `${days}d ago`;
+}
+
+// ─────────────────────────────────────────────────────────────
 // Page Component
 // ─────────────────────────────────────────────────────────────
 
@@ -228,8 +296,20 @@ export default function ActionsPage() {
   const [confirmDeleteScript, setConfirmDeleteScript] = useState<string | null>(null);
   const [deletingScript, setDeletingScript] = useState<string | null>(null);
 
-  // Action log
+  // Action log (legacy localStorage)
   const [actionLog, setActionLog] = useLocalStorage<ActionLogEntry[]>("action-log", []);
+
+  // Sessions tab state
+  const [sessions, setSessions] = useState<SessionEntry[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [sessionFilter, setSessionFilter] = useState<"all" | "active" | "recent">("all");
+
+  // Activity tab state (server-side logs)
+  const [activityLogs, setActivityLogs] = useState<ActivityLogEntry[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityFilter, setActivityFilter] = useState<"all" | "cron" | "sessions">("all");
+  const [activitySearch, setActivitySearch] = useState("");
+  const [activityAutoRefresh, setActivityAutoRefresh] = useState(false);
 
   const addLogEntry = useCallback(
     (entry: Omit<ActionLogEntry, "id">) => {
@@ -265,9 +345,46 @@ export default function ActionsPage() {
     }
   }, []);
 
+  const fetchSessions = useCallback(async () => {
+    setSessionsLoading(true);
+    try {
+      const res = await fetch("/api/sessions?limit=50");
+      const data = await res.json();
+      setSessions(data.sessions || []);
+    } catch (err) {
+      console.error("Failed to fetch sessions:", err);
+    } finally {
+      setSessionsLoading(false);
+    }
+  }, []);
+
+  const fetchActivity = useCallback(async () => {
+    setActivityLoading(true);
+    try {
+      const params = new URLSearchParams({ limit: "50", type: activityFilter });
+      if (activitySearch) params.set("search", activitySearch);
+      const res = await fetch(`/api/logs?${params}`);
+      const data = await res.json();
+      setActivityLogs(data.entries || []);
+    } catch (err) {
+      console.error("Failed to fetch activity:", err);
+    } finally {
+      setActivityLoading(false);
+    }
+  }, [activityFilter, activitySearch]);
+
   useEffect(() => {
     refresh();
-  }, [refresh]);
+    fetchSessions();
+    fetchActivity();
+  }, [refresh, fetchSessions, fetchActivity]);
+
+  // Activity auto-refresh
+  useEffect(() => {
+    if (!activityAutoRefresh) return;
+    const interval = setInterval(fetchActivity, 15000);
+    return () => clearInterval(interval);
+  }, [activityAutoRefresh, fetchActivity]);
 
   // ─────────────────────────────────────────────────────────────
   // Cron handlers
@@ -463,18 +580,22 @@ export default function ActionsPage() {
 
       {/* Tabs */}
       <Tabs defaultValue="scheduled" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3 bg-zinc-900">
+        <TabsList className="grid w-full grid-cols-4 bg-zinc-900">
           <TabsTrigger value="scheduled" className="data-[state=active]:bg-zinc-800 text-xs sm:text-sm px-1 sm:px-3">
             <Clock className="w-4 h-4 mr-1 sm:mr-2 shrink-0" />
-            <span className="truncate">Scheduled<span className="hidden sm:inline"> ({totalScheduledCount})</span></span>
+            <span className="truncate">Cron<span className="hidden sm:inline"> ({totalScheduledCount})</span></span>
           </TabsTrigger>
           <TabsTrigger value="manual" className="data-[state=active]:bg-zinc-800 text-xs sm:text-sm px-1 sm:px-3">
             <FileCode className="w-4 h-4 mr-1 sm:mr-2 shrink-0" />
             <span className="truncate">Scripts<span className="hidden sm:inline"> ({scripts.length})</span></span>
           </TabsTrigger>
-          <TabsTrigger value="log" className="data-[state=active]:bg-zinc-800 text-xs sm:text-sm px-1 sm:px-3">
+          <TabsTrigger value="sessions" className="data-[state=active]:bg-zinc-800 text-xs sm:text-sm px-1 sm:px-3" onClick={() => fetchSessions()}>
+            <Users className="w-4 h-4 mr-1 sm:mr-2 shrink-0" />
+            <span className="truncate">Sessions</span>
+          </TabsTrigger>
+          <TabsTrigger value="activity" className="data-[state=active]:bg-zinc-800 text-xs sm:text-sm px-1 sm:px-3" onClick={() => fetchActivity()}>
             <ScrollText className="w-4 h-4 mr-1 sm:mr-2 shrink-0" />
-            <span className="truncate">Log<span className="hidden sm:inline"> ({actionLog.length})</span></span>
+            <span className="truncate">Activity</span>
           </TabsTrigger>
         </TabsList>
 
@@ -847,62 +968,202 @@ export default function ActionsPage() {
         </TabsContent>
 
         {/* ═══════════════════════════════════════════════════════════ */}
-        {/* LOG TAB */}
+        {/* SESSIONS TAB */}
         {/* ═══════════════════════════════════════════════════════════ */}
-        <TabsContent value="log" className="space-y-4">
-          {/* Header row with clear button */}
-          {actionLog.length > 0 && (
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-zinc-500">
-                Last {actionLog.length} actions (kept locally)
-              </p>
+        <TabsContent value="sessions" className="space-y-4">
+          {/* Filter buttons */}
+          <div className="flex items-center gap-2">
+            {(["all", "active", "recent"] as const).map((f) => (
               <button
-                onClick={() => setActionLog([])}
-                className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+                key={f}
+                onClick={() => setSessionFilter(f)}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-xs transition-colors capitalize",
+                  sessionFilter === f
+                    ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                    : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+                )}
               >
-                <Eraser className="w-3.5 h-3.5" />
-                Clear
+                {f}
               </button>
-            </div>
-          )}
+            ))}
+            <button
+              onClick={fetchSessions}
+              disabled={sessionsLoading}
+              className="ml-auto p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors"
+            >
+              <RefreshCw className={cn("w-4 h-4", sessionsLoading && "animate-spin")} />
+            </button>
+          </div>
 
           <section className="space-y-2">
-            {actionLog.length === 0 ? (
+            {sessionsLoading && sessions.length === 0 ? (
+              <>
+                <Skeleton className="h-20 skeleton-shimmer rounded-xl" />
+                <Skeleton className="h-20 skeleton-shimmer rounded-xl" />
+                <Skeleton className="h-20 skeleton-shimmer rounded-xl" />
+              </>
+            ) : sessions.length === 0 ? (
+              <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-8 text-center">
+                <Users className="w-10 h-10 text-zinc-700 mx-auto mb-3" />
+                <p className="text-sm text-zinc-400 font-medium">No sessions found</p>
+                <p className="text-xs text-zinc-500 mt-1">Sessions appear when the agent processes messages.</p>
+              </div>
+            ) : (
+              (() => {
+                let filtered = sessions;
+                if (sessionFilter === "active") {
+                  filtered = sessions.filter((s) => s.active);
+                } else if (sessionFilter === "recent") {
+                  const oneHourAgo = Date.now() - 60 * 60 * 1000;
+                  filtered = sessions.filter((s) => s.updatedAt > oneHourAgo);
+                }
+
+                if (filtered.length === 0) {
+                  return (
+                    <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-6 text-center">
+                      <p className="text-sm text-zinc-400">No {sessionFilter} sessions</p>
+                    </div>
+                  );
+                }
+
+                // Group: active first
+                const activeSessions = filtered.filter((s) => s.active);
+                const inactiveSessions = filtered.filter((s) => !s.active);
+
+                return (
+                  <>
+                    {activeSessions.length > 0 && (
+                      <div className="text-xs font-medium text-emerald-400 uppercase tracking-wider mb-1">
+                        Active ({activeSessions.length})
+                      </div>
+                    )}
+                    {activeSessions.map((s) => (
+                      <SessionCard key={s.key} session={s} />
+                    ))}
+                    {inactiveSessions.length > 0 && activeSessions.length > 0 && (
+                      <div className="text-xs font-medium text-zinc-500 uppercase tracking-wider mt-3 mb-1">
+                        Recent
+                      </div>
+                    )}
+                    {inactiveSessions.map((s) => (
+                      <SessionCard key={s.key} session={s} />
+                    ))}
+                  </>
+                );
+              })()
+            )}
+          </section>
+        </TabsContent>
+
+        {/* ═══════════════════════════════════════════════════════════ */}
+        {/* ACTIVITY TAB (Server-side aggregated logs) */}
+        {/* ═══════════════════════════════════════════════════════════ */}
+        <TabsContent value="activity" className="space-y-4">
+          {/* Filters row */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {(["all", "cron", "sessions"] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setActivityFilter(f)}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-xs transition-colors capitalize",
+                  activityFilter === f
+                    ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                    : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+                )}
+              >
+                {f === "all" ? "All" : f === "cron" ? "Cron" : "Sessions"}
+              </button>
+            ))}
+
+            {/* Search */}
+            <div className="relative flex-1 min-w-[120px] max-w-[200px]">
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+              <input
+                type="text"
+                value={activitySearch}
+                onChange={(e) => setActivitySearch(e.target.value)}
+                placeholder="Search..."
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg pl-8 pr-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+              />
+            </div>
+
+            {/* Auto-refresh toggle */}
+            <button
+              onClick={() => setActivityAutoRefresh(!activityAutoRefresh)}
+              className={cn(
+                "ml-auto flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs transition-colors",
+                activityAutoRefresh
+                  ? "bg-emerald-500/20 text-emerald-400"
+                  : "bg-zinc-800 text-zinc-500 hover:text-zinc-300"
+              )}
+            >
+              <Radio className={cn("w-3 h-3", activityAutoRefresh && "animate-pulse")} />
+              Live
+            </button>
+          </div>
+
+          <section className="space-y-2">
+            {activityLoading && activityLogs.length === 0 ? (
+              <>
+                <Skeleton className="h-16 skeleton-shimmer rounded-xl" />
+                <Skeleton className="h-16 skeleton-shimmer rounded-xl" />
+                <Skeleton className="h-16 skeleton-shimmer rounded-xl" />
+              </>
+            ) : activityLogs.length === 0 ? (
               <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-8 text-center">
                 <ScrollText className="w-10 h-10 text-zinc-700 mx-auto mb-3" />
-                <p className="text-sm text-zinc-400 font-medium">No actions recorded yet</p>
+                <p className="text-sm text-zinc-400 font-medium">No activity recorded</p>
                 <p className="text-xs text-zinc-500 mt-1">
-                  Run a script or trigger a cron job to see it here.
+                  Cron runs and session activity will appear here.
                 </p>
               </div>
             ) : (
-              actionLog.map((entry) => (
+              activityLogs.map((entry, i) => (
                 <div
-                  key={entry.id}
+                  key={`${entry.ts}-${i}`}
                   className="bg-zinc-900 rounded-xl border border-zinc-800 p-3 flex items-start gap-3"
                 >
                   {/* Status icon */}
                   <div className="mt-0.5 shrink-0">
-                    {entry.success ? (
-                      <CheckCircle className="w-4 h-4 text-green-500" />
+                    {entry.type === "cron" ? (
+                      entry.status === "error" ? (
+                        <XCircle className="w-4 h-4 text-red-500" />
+                      ) : (
+                        <CheckCircle className="w-4 h-4 text-green-500" />
+                      )
                     ) : (
-                      <XCircle className="w-4 h-4 text-red-500" />
+                      <Users className="w-4 h-4 text-sky-400" />
                     )}
                   </div>
 
                   {/* Details */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-sm truncate">{entry.name}</span>
+                      <span className="font-medium text-sm truncate">{entry.source}</span>
                       <Badge
                         variant="secondary"
                         className={cn(
                           "text-xs",
-                          entry.type === "cron" ? "text-sky-400" : "text-emerald-400"
+                          entry.type === "cron" ? "text-sky-400" : "text-purple-400"
                         )}
                       >
-                        {entry.type === "cron" ? "Cron" : "Script"}
+                        {entry.type === "cron" ? "CRON" : "SESSION"}
                       </Badge>
+                      {entry.status && entry.type === "cron" && (
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-xs",
+                            entry.status === "ok" || entry.status === "success"
+                              ? "text-green-400 border-green-500/30"
+                              : "text-red-400 border-red-500/30"
+                          )}
+                        >
+                          {entry.status}
+                        </Badge>
+                      )}
                       {entry.durationMs !== undefined && (
                         <span className="text-xs text-zinc-600">
                           {entry.durationMs < 1000
@@ -911,20 +1172,61 @@ export default function ActionsPage() {
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-zinc-500 mt-1">
-                      {formatLogTime(entry.timestamp)}
+                    <p className="text-xs text-zinc-400 mt-1 line-clamp-2">{entry.summary}</p>
+                    <div className="text-[11px] text-zinc-500 mt-1">
+                      {formatActivityTime(entry.ts)}
                     </div>
-                    {entry.error && (
-                      <p className="text-xs text-red-400 mt-1 truncate">{entry.error}</p>
-                    )}
-                    {entry.output && !entry.error && (
-                      <p className="text-xs text-zinc-500 mt-1 truncate">{entry.output}</p>
-                    )}
                   </div>
                 </div>
               ))
             )}
           </section>
+
+          {/* Legacy local log (collapsed) */}
+          {actionLog.length > 0 && (
+            <details className="mt-4">
+              <summary className="text-xs text-zinc-600 cursor-pointer hover:text-zinc-400 transition-colors">
+                Local action log ({actionLog.length} entries)
+              </summary>
+              <div className="mt-2 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-zinc-500">Script/cron runs logged locally</p>
+                  <button
+                    onClick={() => setActionLog([])}
+                    className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+                  >
+                    <Eraser className="w-3.5 h-3.5" />
+                    Clear
+                  </button>
+                </div>
+                {actionLog.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="bg-zinc-900/50 rounded-lg border border-zinc-800/50 p-2.5 flex items-start gap-2"
+                  >
+                    <div className="mt-0.5 shrink-0">
+                      {entry.success ? (
+                        <CheckCircle className="w-3.5 h-3.5 text-green-500" />
+                      ) : (
+                        <XCircle className="w-3.5 h-3.5 text-red-500" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-medium truncate">{entry.name}</span>
+                        <span className="text-[11px] text-zinc-600">
+                          {entry.type === "cron" ? "Cron" : "Script"}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-zinc-600 mt-0.5">
+                        {formatLogTime(entry.timestamp)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
         </TabsContent>
       </Tabs>
 
@@ -1345,6 +1647,65 @@ function ScheduleScriptModal({
               </button>
             </>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Session Card Component
+// ─────────────────────────────────────────────────────────────
+
+function SessionCard({ session }: { session: SessionEntry }) {
+  const typeBadge = {
+    main: { label: "Main", className: "text-emerald-400 bg-emerald-500/10" },
+    channel: { label: "Channel", className: "text-sky-400 bg-sky-500/10" },
+    cron: { label: "Cron", className: "text-amber-400 bg-amber-500/10" },
+    subagent: { label: "Subagent", className: "text-purple-400 bg-purple-500/10" },
+    unknown: { label: "Other", className: "text-zinc-400 bg-zinc-500/10" },
+  }[session.type];
+
+  return (
+    <div className={cn(
+      "bg-zinc-900 rounded-xl border p-3 sm:p-4 transition-all",
+      session.active ? "border-emerald-500/30" : "border-zinc-800"
+    )}>
+      <div className="flex items-start gap-3">
+        {/* Active indicator */}
+        <div className={cn(
+          "w-2.5 h-2.5 rounded-full mt-1.5 shrink-0",
+          session.active ? "bg-emerald-500 animate-pulse" : "bg-zinc-600"
+        )} />
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-medium text-sm truncate">{session.label}</span>
+            <span className={cn("text-xs px-1.5 py-0.5 rounded-full", typeBadge.className)}>
+              {typeBadge.label}
+            </span>
+          </div>
+
+          <div className="text-xs text-zinc-500 mt-1 font-mono truncate">{session.key}</div>
+
+          <div className="flex items-center gap-3 mt-2 text-xs text-zinc-500 flex-wrap">
+            {session.turnCount > 0 && (
+              <span>{session.turnCount} turns</span>
+            )}
+            {session.tokenCount > 0 && (
+              <span>
+                {session.tokenCount >= 1000
+                  ? `${(session.tokenCount / 1000).toFixed(1)}k`
+                  : session.tokenCount} tokens
+              </span>
+            )}
+            {session.model && (
+              <span className="text-zinc-600">{session.model}</span>
+            )}
+            <span className="ml-auto text-zinc-600">
+              {formatSessionAge(session.updatedAt)}
+            </span>
+          </div>
         </div>
       </div>
     </div>

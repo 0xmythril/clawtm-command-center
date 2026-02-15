@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Puzzle, PlayCircle, Brain } from "lucide-react";
+import { Home, PlayCircle, Radio, Brain } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/", icon: Home, label: "Home", dotKey: "home" as const },
   { href: "/actions", icon: PlayCircle, label: "Actions", dotKey: "actions" as const },
-  { href: "/skills", icon: Puzzle, label: "Skills", dotKey: "skills" as const },
+  { href: "/contacts", icon: Radio, label: "Contacts", dotKey: "contacts" as const },
   { href: "/memory", icon: Brain, label: "Memory", dotKey: "memory" as const },
 ];
 
@@ -33,6 +33,19 @@ export function BottomNav() {
           }
         }
 
+        // Check for pending pairing requests or device approvals
+        try {
+          const contactsRes = await fetch("/api/contacts?summary=true");
+          if (contactsRes.ok) {
+            const summary = await contactsRes.json();
+            if ((summary.pendingPairingCount ?? 0) > 0 || (summary.pendingDevicesCount ?? 0) > 0) {
+              newDots.contacts = true;
+            }
+          }
+        } catch {
+          // ignore
+        }
+
         setDots(newDots);
       } catch {
         // ignore
@@ -48,7 +61,7 @@ export function BottomNav() {
     <nav className="fixed bottom-0 left-0 right-0 bg-zinc-900/95 backdrop-blur-sm border-t border-zinc-800 z-40">
       <div className="max-w-2xl mx-auto flex justify-around items-center h-16">
         {navItems.map((item) => {
-          const isActive = pathname === item.href;
+          const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           const hasDot = dots[item.dotKey] && !isActive;
           return (
             <Link
