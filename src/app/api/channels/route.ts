@@ -59,6 +59,22 @@ export async function GET() {
       if (ch.groups && typeof ch.groups === "object") {
         return Object.keys(ch.groups as Record<string, unknown>).length;
       }
+      // WhatsApp often stores groups under accounts.<name>.groups
+      if (ch.accounts && typeof ch.accounts === "object") {
+        let total = 0;
+        for (const account of Object.values(ch.accounts as Record<string, unknown>)) {
+          if (
+            account &&
+            typeof account === "object" &&
+            "groups" in account &&
+            (account as Record<string, unknown>).groups &&
+            typeof (account as Record<string, unknown>).groups === "object"
+          ) {
+            total += Object.keys((account as Record<string, unknown>).groups as Record<string, unknown>).length;
+          }
+        }
+        return total;
+      }
       return 0;
     }
 
@@ -123,8 +139,14 @@ export async function GET() {
       });
     }
 
-    // WhatsApp
-    if (channelsConfig.whatsapp?.enabled) {
+    // WhatsApp: treat as active when explicitly enabled OR configured with common WA keys.
+    if (
+      channelsConfig.whatsapp?.enabled ||
+      channelsConfig.whatsapp?.accounts ||
+      channelsConfig.whatsapp?.allowFrom ||
+      channelsConfig.whatsapp?.dmPolicy ||
+      channelsConfig.whatsapp?.groupPolicy
+    ) {
       const wa = channelsConfig.whatsapp;
       const phone = wa.phone;
       channels.push({

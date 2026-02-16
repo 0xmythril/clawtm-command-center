@@ -133,6 +133,124 @@ async function writeJsonFile(filePath: string, value: unknown): Promise<void> {
   await fs.writeFile(filePath, JSON.stringify(value, null, 2), "utf-8");
 }
 
+async function readOpenClawConfigRaw(): Promise<Record<string, unknown>> {
+  const raw = await fs.readFile(OPENCLAW_CONFIG, "utf-8");
+  return JSON.parse(raw) as Record<string, unknown>;
+}
+
+async function writeOpenClawConfigRaw(config: Record<string, unknown>): Promise<void> {
+  const tmpPath = `${OPENCLAW_CONFIG}.${randomBytes(8).toString("hex")}.tmp`;
+  await fs.writeFile(tmpPath, JSON.stringify(config, null, 2), "utf-8");
+  await fs.rename(tmpPath, OPENCLAW_CONFIG);
+}
+
+function getChannelConfig(
+  config: Record<string, unknown>,
+  channel: string
+): Record<string, unknown> | null {
+  const channels = config.channels;
+  if (!channels || typeof channels !== "object") return null;
+  const entry = (channels as Record<string, unknown>)[channel];
+  if (!entry || typeof entry !== "object") return null;
+  return entry as Record<string, unknown>;
+}
+
+function getAllowFromFromConfigChannel(channelConfig: Record<string, unknown>): string[] {
+  const ids = new Set<string>();
+
+  const direct = channelConfig.allowFrom;
+  if (Array.isArray(direct)) {
+    for (const id of direct) ids.add(String(id));
+  }
+
+  const accounts = channelConfig.accounts;
+  if (accounts && typeof accounts === "object") {
+    for (const account of Object.values(accounts as Record<string, unknown>)) {
+      if (!account || typeof account !== "object") continue;
+      const allow = (account as Record<string, unknown>).allowFrom;
+      if (!Array.isArray(allow)) continue;
+      for (const id of allow) ids.add(String(id));
+    }
+  }
+
+  return [...ids];
+}
+
+function removeAllowFromFromConfigChannel(
+  channelConfig: Record<string, unknown>,
+  targetId: string
+): boolean {
+  let changed = false;
+  const normalizedTarget = String(targetId).trim();
+
+  const direct = channelConfig.allowFrom;
+  if (Array.isArray(direct)) {
+    const next = direct.filter((id) => String(id).trim() !== normalizedTarget);
+    if (next.length !== direct.length) {
+      channelConfig.allowFrom = next;
+      changed = true;
+    }
+  }
+
+  const accounts = channelConfig.accounts;
+  if (accounts && typeof accounts === "object") {
+    for (const [key, account] of Object.entries(accounts as Record<string, unknown>)) {
+      if (!account || typeof account !== "object") continue;
+      const rec = account as Record<string, unknown>;
+      const allow = rec.allowFrom;
+      if (!Array.isArray(allow)) continue;
+      const next = allow.filter((id) => String(id).trim() !== normalizedTarget);
+      if (next.length !== allow.length) {
+        rec.allowFrom = next;
+        (accounts as Record<string, unknown>)[key] = rec;
+        changed = true;
+      }
+    }
+  }
+
+  return changed;
+}
+
+type GroupContainerRef = {
+  channelId: string;
+  accountId?: string;
+  channelConfig: Record<string, unknown>;
+  groups: Record<string, unknown>;
+};
+
+function collectGroupContainers(
+  channelId: string,
+  channelConfig: Record<string, unknown>
+): GroupContainerRef[] {
+  const out: GroupContainerRef[] = [];
+
+  if (channelConfig.groups && typeof channelConfig.groups === "object") {
+    out.push({
+      channelId,
+      channelConfig,
+      groups: channelConfig.groups as Record<string, unknown>,
+    });
+  }
+
+  const accounts = channelConfig.accounts;
+  if (accounts && typeof accounts === "object") {
+    for (const [accountId, account] of Object.entries(accounts as Record<string, unknown>)) {
+      if (!account || typeof account !== "object") continue;
+      const accountRec = account as Record<string, unknown>;
+      if (accountRec.groups && typeof accountRec.groups === "object") {
+        out.push({
+          channelId,
+          accountId,
+          channelConfig,
+          groups: accountRec.groups as Record<string, unknown>,
+        });
+      }
+    }
+  }
+
+  return out;
+}
+
 async function getPeople(channel: string) {
   const allowPath = path.join(OPENCLAW_CREDENTIALS, `${channel}-allowFrom.json`);
   const pairingPath = path.join(OPENCLAW_CREDENTIALS, `${channel}-pairing.json`);
@@ -142,28 +260,59 @@ async function getPeople(channel: string) {
     readJsonFile<PairingStore>(pairingPath, { version: 1, requests: [] }),
   ]);
 
-  const allowFrom = Array.isArray(allowData.allowFrom) ? allowData.allowFrom : [];
+  const fileAllowFrom = Array.isArray(allowData.allowFrom) ? allowData.allowFrom : [];
   const requests = Array.isArray(pairingData.requests) ? pairingData.requests : [];
+  const mergedAllowFrom = new Set<string>(fileAllowFrom.map((id) => String(id)));
 
-  return { allowFrom, pairingRequests: requests };
+  try {
+    const config = await readOpenClawConfigRaw();
+    const channelConfig = getChannelConfig(config, channel);
+    if (channelConfig) {
+      for (const id of getAllowFromFromConfigChannel(channelConfig)) {
+        mergedAllowFrom.add(String(id));
+      }
+    }
+  } catch {
+    // best-effort merge from config; ignore if config cannot be read
+  }
+
+  return { allowFrom: [...mergedAllowFrom], pairingRequests: requests };
 }
 
 /** Get people from all channels that have *-allowFrom.json in credentials */
 async function getAllChannelsPeople(): Promise<
   Record<string, { allowFrom: string[]; pairingRequests: PairingStore["requests"] }>
 > {
-  let entries: [string, unknown][] = [];
+  const channelIds = new Set<string>();
   try {
-    entries = await fs.readdir(OPENCLAW_CREDENTIALS, { withFileTypes: true }).then((files) =>
-      files
-        .filter((f) => f.isFile() && f.name.endsWith("-allowFrom.json"))
-        .map((f) => [f.name.replace(/-allowFrom\.json$/, ""), null] as [string, unknown])
-    );
+    const files = await fs.readdir(OPENCLAW_CREDENTIALS, { withFileTypes: true });
+    for (const file of files) {
+      if (file.isFile() && file.name.endsWith("-allowFrom.json")) {
+        channelIds.add(file.name.replace(/-allowFrom\.json$/, ""));
+      }
+    }
   } catch {
-    return { telegram: await getPeople("telegram") };
+    // ignore; we'll still try to derive channels from config
   }
+
+  try {
+    const config = await readOpenClawConfigRaw();
+    const channels = config.channels;
+    if (channels && typeof channels === "object") {
+      for (const [channelId, channelConfig] of Object.entries(channels as Record<string, unknown>)) {
+        if (!channelConfig || typeof channelConfig !== "object") continue;
+        const allowFrom = getAllowFromFromConfigChannel(channelConfig as Record<string, unknown>);
+        if (allowFrom.length > 0) {
+          channelIds.add(channelId);
+        }
+      }
+    }
+  } catch {
+    // ignore config errors here and keep file-based channels
+  }
+
   const out: Record<string, { allowFrom: string[]; pairingRequests: PairingStore["requests"] }> = {};
-  for (const [channel] of entries) {
+  for (const channel of channelIds) {
     const p = await getPeople(channel);
     out[channel] = { allowFrom: p.allowFrom, pairingRequests: p.pairingRequests };
   }
@@ -240,14 +389,13 @@ function buildMergedContactList(
 }
 
 async function getGroups() {
-  const raw = await fs.readFile(OPENCLAW_CONFIG, "utf-8");
-  const config = JSON.parse(raw);
+  const config = await readOpenClawConfigRaw();
   const channels = config.channels || {};
   const result: { channel: string; groupId: string; settings: Record<string, unknown> }[] = [];
   for (const [channelId, channelConfig] of Object.entries(channels)) {
-    const ch = channelConfig as { groups?: Record<string, unknown>; groupPolicy?: string };
-    if (ch.groups && typeof ch.groups === "object") {
-      for (const [groupId, settings] of Object.entries(ch.groups)) {
+    if (!channelConfig || typeof channelConfig !== "object") continue;
+    for (const container of collectGroupContainers(channelId, channelConfig as Record<string, unknown>)) {
+      for (const [groupId, settings] of Object.entries(container.groups)) {
         result.push({
           channel: channelId,
           groupId,
@@ -336,11 +484,21 @@ export async function GET(request: NextRequest) {
 
     if (section === "groups") {
       const [groups, nicknames] = await Promise.all([getGroups(), readGroupNicknames()]);
-      const raw = await fs.readFile(OPENCLAW_CONFIG, "utf-8");
-      const config = JSON.parse(raw);
-      const telegramGroups = (config.channels?.telegram?.groups as Record<string, unknown>) || {};
-      const groupPolicy = config.channels?.telegram?.groupPolicy ?? "allowlist";
-      return NextResponse.json({ groups, groupPolicy, telegramGroups, nicknames });
+      const config = await readOpenClawConfigRaw();
+      const channelEntries =
+        config.channels && typeof config.channels === "object"
+          ? (config.channels as Record<string, unknown>)
+          : {};
+      const groupPolicies: Record<string, string> = {};
+      for (const [channelId, channelConfig] of Object.entries(channelEntries)) {
+        if (!channelConfig || typeof channelConfig !== "object") continue;
+        const policy = (channelConfig as Record<string, unknown>).groupPolicy;
+        if (typeof policy === "string") {
+          groupPolicies[channelId] = policy;
+        }
+      }
+      const groupPolicy = groupPolicies.telegram ?? Object.values(groupPolicies)[0] ?? "allowlist";
+      return NextResponse.json({ groups, groupPolicy, groupPolicies, nicknames });
     }
 
     if (section === "devices") {
@@ -393,7 +551,22 @@ export async function POST(request: NextRequest) {
       const allowFrom = Array.isArray(data.allowFrom) ? data.allowFrom : [];
       const next = allowFrom.filter((id) => String(id).trim() !== String(userId).trim());
       await writeJsonFile(allowPath, { version: 1, allowFrom: next });
-      return NextResponse.json({ ok: true, allowFrom: next });
+
+      try {
+        const config = await readOpenClawConfigRaw();
+        const channelConfig = getChannelConfig(config, channel);
+        if (channelConfig) {
+          const changed = removeAllowFromFromConfigChannel(channelConfig, String(userId));
+          if (changed) {
+            await writeOpenClawConfigRaw(config);
+          }
+        }
+      } catch {
+        // Keep block-user resilient even if config write fails.
+      }
+
+      const updated = await getPeople(channel);
+      return NextResponse.json({ ok: true, allowFrom: updated.allowFrom });
     }
 
     if (action === "reject-pairing" && code) {
@@ -657,19 +830,21 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-      const raw = await fs.readFile(OPENCLAW_CONFIG, "utf-8");
-      const config = JSON.parse(raw);
-      if (!config.channels?.[ch]?.groups?.[gid]) {
+      const config = await readOpenClawConfigRaw();
+      const channelConfig = getChannelConfig(config, ch);
+      if (!channelConfig) {
+        return NextResponse.json({ error: `Channel '${ch}' not found in config` }, { status: 404 });
+      }
+      const containers = collectGroupContainers(ch, channelConfig);
+      const target = containers.find((c) => Object.prototype.hasOwnProperty.call(c.groups, gid));
+      if (!target) {
         return NextResponse.json({ error: "Group not found" }, { status: 404 });
       }
       // Merge new settings into existing
-      const existing = config.channels[ch].groups[gid];
-      config.channels[ch].groups[gid] = { ...existing, ...newSettings };
-      // Atomic write
-      const tmpPath = `${OPENCLAW_CONFIG}.${randomBytes(8).toString("hex")}.tmp`;
-      await fs.writeFile(tmpPath, JSON.stringify(config, null, 2), "utf-8");
-      await fs.rename(tmpPath, OPENCLAW_CONFIG);
-      return NextResponse.json({ ok: true, settings: config.channels[ch].groups[gid] });
+      const existing = target.groups[gid] as Record<string, unknown>;
+      target.groups[gid] = { ...existing, ...newSettings };
+      await writeOpenClawConfigRaw(config);
+      return NextResponse.json({ ok: true, settings: target.groups[gid] });
     }
 
     if (action === "add-group") {
@@ -684,28 +859,44 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-      const raw = await fs.readFile(OPENCLAW_CONFIG, "utf-8");
-      const config = JSON.parse(raw);
-      if (!config.channels?.[ch]) {
+      const config = await readOpenClawConfigRaw();
+      const channelConfig = getChannelConfig(config, ch);
+      if (!channelConfig) {
         return NextResponse.json(
           { error: `Channel '${ch}' not found in config` },
           { status: 404 }
         );
       }
-      if (!config.channels[ch].groups) {
-        config.channels[ch].groups = {};
-      }
-      if (config.channels[ch].groups[gid]) {
+
+      const containers = collectGroupContainers(ch, channelConfig);
+      if (containers.some((c) => Object.prototype.hasOwnProperty.call(c.groups, gid))) {
         return NextResponse.json(
           { error: "Group already exists" },
           { status: 409 }
         );
       }
-      config.channels[ch].groups[gid] = newSettings || { requireMention: true };
-      // Atomic write
-      const tmpPath = `${OPENCLAW_CONFIG}.${randomBytes(8).toString("hex")}.tmp`;
-      await fs.writeFile(tmpPath, JSON.stringify(config, null, 2), "utf-8");
-      await fs.rename(tmpPath, OPENCLAW_CONFIG);
+
+      let targetGroups: Record<string, unknown> | null = null;
+      if (channelConfig.groups && typeof channelConfig.groups === "object") {
+        targetGroups = channelConfig.groups as Record<string, unknown>;
+      } else if (
+        channelConfig.accounts &&
+        typeof channelConfig.accounts === "object" &&
+        (channelConfig.accounts as Record<string, unknown>).default &&
+        typeof (channelConfig.accounts as Record<string, unknown>).default === "object"
+      ) {
+        const defaultAccount = (channelConfig.accounts as Record<string, unknown>).default as Record<string, unknown>;
+        if (!defaultAccount.groups || typeof defaultAccount.groups !== "object") {
+          defaultAccount.groups = {};
+        }
+        targetGroups = defaultAccount.groups as Record<string, unknown>;
+      } else {
+        channelConfig.groups = {};
+        targetGroups = channelConfig.groups as Record<string, unknown>;
+      }
+
+      targetGroups[gid] = newSettings || { requireMention: true };
+      await writeOpenClawConfigRaw(config);
       return NextResponse.json({ ok: true });
     }
 
@@ -720,16 +911,18 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-      const raw = await fs.readFile(OPENCLAW_CONFIG, "utf-8");
-      const config = JSON.parse(raw);
-      if (!config.channels?.[ch]?.groups?.[gid]) {
+      const config = await readOpenClawConfigRaw();
+      const channelConfig = getChannelConfig(config, ch);
+      if (!channelConfig) {
+        return NextResponse.json({ error: `Channel '${ch}' not found in config` }, { status: 404 });
+      }
+      const containers = collectGroupContainers(ch, channelConfig);
+      const target = containers.find((c) => Object.prototype.hasOwnProperty.call(c.groups, gid));
+      if (!target) {
         return NextResponse.json({ error: "Group not found" }, { status: 404 });
       }
-      delete config.channels[ch].groups[gid];
-      // Atomic write
-      const tmpPath = `${OPENCLAW_CONFIG}.${randomBytes(8).toString("hex")}.tmp`;
-      await fs.writeFile(tmpPath, JSON.stringify(config, null, 2), "utf-8");
-      await fs.rename(tmpPath, OPENCLAW_CONFIG);
+      delete target.groups[gid];
+      await writeOpenClawConfigRaw(config);
       // Also remove nickname if exists
       const nicknames = await readGroupNicknames();
       const key = `${ch}:${gid}`;
