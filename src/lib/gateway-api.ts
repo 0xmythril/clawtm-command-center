@@ -128,10 +128,17 @@ export async function getSkillsStatus(): Promise<SkillStatusReport | null> {
 
 export async function getGatewayHealth(): Promise<{ connected: boolean; uptime?: number }> {
   try {
-    const status = await gatewayCall<{ uptime?: number }>("status", {});
-    return { connected: true, uptime: status.uptime };
+    // Fast path: lightweight presence check (much smaller payload than `status`)
+    await gatewayCall("system-presence", {});
+    return { connected: true };
   } catch {
-    return { connected: false };
+    // Fallback for older/newer gateway variants where system-presence may differ
+    try {
+      const status = await gatewayCall<{ uptime?: number }>("status", {});
+      return { connected: true, uptime: status.uptime };
+    } catch {
+      return { connected: false };
+    }
   }
 }
 

@@ -1291,11 +1291,15 @@ function ContactsPageInner() {
                     const isEditing = editingGroup?.key === nickKey;
                     const isExpanded = expandedGroupKey === nickKey;
                     const requireMention = g.settings?.requireMention;
+                    const meta = channelMeta[g.channel] || { color: "from-zinc-500/20 to-zinc-600/20", emoji: "📡" };
 
                     return (
                       <div
                         key={`${g.channel}-${g.groupId}`}
-                        className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden"
+                        className={cn(
+                          "bg-gradient-to-br rounded-xl border border-zinc-800 overflow-hidden",
+                          meta.color
+                        )}
                       >
                         {/* Group header row */}
                         <div
@@ -1303,7 +1307,7 @@ function ContactsPageInner() {
                           onClick={() => setExpandedGroupKey(isExpanded ? null : nickKey)}
                         >
                           <div className="flex items-center gap-3">
-                            <span className="text-xl shrink-0">💬</span>
+                            <span className="text-xl shrink-0">{meta.emoji}</span>
                             <div className="min-w-0 flex-1">
                               {isEditing ? (
                                 <input

@@ -1,90 +1,92 @@
 import { NextRequest, NextResponse } from "next/server";
-import WebSocket from "ws";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 
-const GATEWAY_URL = process.env.GATEWAY_WS_URL || "ws://127.0.0.1:18789";
-const GATEWAY_TOKEN = process.env.GATEWAY_TOKEN || "";
+const execFileAsync = promisify(execFile);
+const GATEWAY_TIMEOUT_MS = 30_000;
+const CACHE_TTL_MS = 15_000;
+const CACHEABLE_METHODS = new Set(["status", "health", "system-presence", "last-heartbeat"]);
 
-// Simple RPC call to gateway
+type CacheEntry = {
+  expiresAt: number;
+  data: unknown;
+};
+
+const responseCache = new Map<string, CacheEntry>();
+const inflight = new Map<string, Promise<unknown>>();
+
+function makeCacheKey(method: string, params: unknown): string {
+  const safeParams =
+    params && typeof params === "object" && !Array.isArray(params) ? params : {};
+  return `${method}:${JSON.stringify(safeParams)}`;
+}
+
+// Use the OpenClaw CLI as a stable gateway transport bridge.
+// This avoids WS auth/context edge-cases in newer OpenClaw versions.
 async function gatewayRequest(method: string, params: unknown = {}): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    const ws = new WebSocket(GATEWAY_URL, { headers: { origin: "http://localhost:3000" } });
-    const timeout = setTimeout(() => {
-      ws.close();
-      reject(new Error("Gateway timeout"));
-    }, 10000);
+  const key = makeCacheKey(method, params);
+  const now = Date.now();
+  const canCache = CACHEABLE_METHODS.has(method);
 
-    let connected = false;
+  if (canCache) {
+    const cached = responseCache.get(key);
+    if (cached && cached.expiresAt > now) {
+      return cached.data;
+    }
+    const pending = inflight.get(key);
+    if (pending) {
+      return pending;
+    }
+  }
 
-    ws.on("open", () => {
-      // Send connect frame
-      const connectFrame = {
-        type: "req",
-        id: "connect-1",
-        method: "connect",
-        params: {
-          minProtocol: 3,
-          maxProtocol: 3,
-          client: {
-            id: "openclaw-control-ui",  // Must be a valid client ID
-            version: "1.0.0",
-            platform: "linux",
-            mode: "backend",
-          },
-          role: "operator",
-          scopes: ["operator.admin", "operator.read", "operator.write"],
-          caps: [],
-          auth: GATEWAY_TOKEN ? { token: GATEWAY_TOKEN } : undefined,
-        },
-      };
-      ws.send(JSON.stringify(connectFrame));
-    });
+  const run = (async () => {
+    const safeParams =
+      params && typeof params === "object" && !Array.isArray(params) ? params : {};
 
-    ws.on("message", (data) => {
-      try {
-        const frame = JSON.parse(data.toString());
+    const { stdout, stderr } = await execFileAsync(
+      "openclaw",
+      [
+        "gateway",
+        "call",
+        method,
+        "--json",
+        "--timeout",
+        String(GATEWAY_TIMEOUT_MS),
+        "--params",
+        JSON.stringify(safeParams),
+      ],
+      { timeout: GATEWAY_TIMEOUT_MS + 3000 }
+    );
 
-        if (frame.type === "res" && frame.id === "connect-1") {
-          if (frame.ok) {
-            connected = true;
-            // Now send the actual request
-            const reqFrame = {
-              type: "req",
-              id: "req-1",
-              method,
-              params,
-            };
-            ws.send(JSON.stringify(reqFrame));
-          } else {
-            clearTimeout(timeout);
-            ws.close();
-            reject(new Error(frame.error?.message || "Connect failed"));
-          }
-        } else if (frame.type === "res" && frame.id === "req-1") {
-          clearTimeout(timeout);
-          ws.close();
-          if (frame.ok) {
-            resolve(frame.payload);
-          } else {
-            reject(new Error(frame.error?.message || "Request failed"));
-          }
-        }
-      } catch (e) {
-        // Ignore parse errors
-      }
-    });
+    const trimmed = stdout.trim();
+    if (!trimmed) {
+      throw new Error(`Gateway call returned empty output${stderr ? `: ${stderr.trim()}` : ""}`);
+    }
 
-    ws.on("error", (err) => {
-      clearTimeout(timeout);
-      reject(err);
-    });
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      throw new Error(`Gateway call returned non-JSON output: ${trimmed.slice(0, 400)}`);
+    }
 
-    ws.on("close", () => {
-      clearTimeout(timeout);
-      if (!connected) {
-        reject(new Error("Connection closed before response"));
-      }
-    });
-  });
+    if (canCache) {
+      responseCache.set(key, { data: parsed, expiresAt: Date.now() + CACHE_TTL_MS });
+    }
+    return parsed;
+  })();
+
+  if (canCache) {
+    inflight.set(key, run);
+  }
+
+  try {
+    return await run;
+  } finally {
+    if (canCache) {
+      inflight.delete(key);
+    }
+  }
 }
 
 export async function POST(request: NextRequest) {
