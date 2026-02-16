@@ -9,13 +9,12 @@ import { ChannelLinks } from "@/components/channel-links";
 import { ContactsSummary } from "@/components/contacts-summary";
 import { RefreshCw, Sparkles, Heart, Camera } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { CronJob, HeartbeatEvent } from "@/lib/gateway-api";
 import {
-  getCronJobs,
-  getLastHeartbeat,
-  getGatewayHealth,
-  type CronJob,
-  type HeartbeatEvent,
-} from "@/lib/gateway-api";
+  readDashboardCache,
+  writeDashboardCache,
+  type DashboardData,
+} from "@/lib/dashboard-cache";
 
 function formatUptime(ms?: number): string {
   if (!ms) return "—";
@@ -66,28 +65,38 @@ export default function DashboardPage() {
   const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Apply dashboard data from any source (cache or fetch)
+  const applyDashboardData = useCallback((data: DashboardData) => {
+    setConnected(data.health.connected);
+    setUptime(data.health.uptime);
+    setCronJobs(data.cronJobs as unknown as CronJob[]);
+    setLastHeartbeat(data.heartbeat as HeartbeatEvent | null);
+    setProposals(data.proposals || "");
+    setHeartbeatMd(data.heartbeatMd || "");
+    setAgentInfo(data.agentInfo);
+    if (data.agentInfo?.hasAvatar) {
+      setAvatarUrl((prev) => prev || `/api/avatar?t=${Date.now()}`);
+    }
+    if (data.systemHealth) setSystemHealth(data.systemHealth);
+  }, []);
+
+  // Single fetch that gets ALL dashboard data in one HTTP request
   const refresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      const [health, jobs, heartbeat, healthData] = await Promise.all([
-        getGatewayHealth(),
-        getCronJobs().catch(() => []),
-        getLastHeartbeat(),
-        fetch("/api/system-health").then((r) => r.json()).catch(() => null),
-      ]);
-      
-      setConnected(health.connected);
-      setUptime(health.uptime);
-      setCronJobs(jobs);
-      setLastHeartbeat(heartbeat);
-      if (healthData && !healthData.error) setSystemHealth(healthData);
+      const res = await fetch("/api/dashboard");
+      const data: DashboardData = await res.json();
+      if (data && !("error" in data)) {
+        applyDashboardData(data);
+        writeDashboardCache(data);
+      }
     } catch (err) {
       console.error("Refresh failed:", err);
       setConnected(false);
     } finally {
       setRefreshing(false);
     }
-  }, []);
+  }, [applyDashboardData]);
 
   // Avatar upload handler
   const handleAvatarUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -99,7 +108,6 @@ export default function DashboardPage() {
       formData.append("file", file);
       const res = await fetch("/api/avatar", { method: "POST", body: formData });
       if (res.ok) {
-        // Bust cache with timestamp
         setAvatarUrl(`/api/avatar?t=${Date.now()}`);
         setAgentInfo(prev => prev ? { ...prev, hasAvatar: true } : prev);
       }
@@ -107,53 +115,25 @@ export default function DashboardPage() {
       console.error("Avatar upload failed:", err);
     } finally {
       setAvatarUploading(false);
-      // Reset input so same file can be re-selected
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }, []);
 
-  // Initial load
+  // Single useEffect: hydrate from cache instantly, then fetch fresh data
   useEffect(() => {
-    refresh();
-    
-    // Auto-refresh every 30 seconds
-    const interval = setInterval(refresh, 30000);
-    return () => clearInterval(interval);
-  }, [refresh]);
-
-  // Fetch PROPOSALS.md, HEARTBEAT.md, and agent info
-  useEffect(() => {
-    async function fetchWorkspaceFiles() {
-      try {
-        const [proposalsRes, heartbeatRes, agentRes] = await Promise.all([
-          fetch("/api/workspace?file=PROPOSALS.md").catch(() => null),
-          fetch("/api/workspace?file=HEARTBEAT.md").catch(() => null),
-          fetch("/api/agent-info").catch(() => null),
-        ]);
-        
-        if (proposalsRes) {
-          const proposalsData = await proposalsRes.json();
-          setProposals(proposalsData.content || "");
-        }
-
-        if (heartbeatRes) {
-          const heartbeatData = await heartbeatRes.json();
-          setHeartbeatMd(heartbeatData.content || "");
-        }
-
-        if (agentRes) {
-          const agentData = await agentRes.json();
-          setAgentInfo(agentData);
-          if (agentData.hasAvatar) {
-            setAvatarUrl(`/api/avatar?t=${Date.now()}`);
-          }
-        }
-      } catch {
-        // ignore
-      }
+    // Instant paint from localStorage cache (no spinner on revisit)
+    const cached = readDashboardCache();
+    if (cached) {
+      applyDashboardData(cached);
     }
-    fetchWorkspaceFiles();
-  }, []);
+
+    // Fetch fresh data (replaces 7 separate requests with 1)
+    refresh();
+
+    // Auto-refresh every 30s
+    const interval = setInterval(refresh, 30_000);
+    return () => clearInterval(interval);
+  }, [refresh, applyDashboardData]);
 
   const uptimeStr = uptime ? formatUptime(uptime * 1000) : undefined;
   const heartbeatTime = lastHeartbeat?.ts

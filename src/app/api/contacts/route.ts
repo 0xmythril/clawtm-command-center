@@ -407,33 +407,24 @@ async function getGroups() {
   return result;
 }
 
-async function getDevicesViaGateway(baseUrl: string): Promise<{
+// Direct server-side gateway call -- avoids self-referential HTTP round-trip
+async function getDevicesViaGateway(): Promise<{
   pending: unknown[];
   paired: unknown[];
 }> {
   try {
-    const res = await fetch(`${baseUrl}/api/gateway`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ method: "device.pair.list", params: {} }),
-    });
-    const data = await res.json();
-    if (!data.ok || !data.data) {
-      return { pending: [], paired: [] };
-    }
+    const { gatewayRequest } = await import("../gateway/route");
+    const data = (await gatewayRequest("device.pair.list", {})) as {
+      pending?: unknown[];
+      paired?: unknown[];
+    };
     return {
-      pending: Array.isArray(data.data.pending) ? data.data.pending : [],
-      paired: Array.isArray(data.data.paired) ? data.data.paired : [],
+      pending: Array.isArray(data?.pending) ? data.pending : [],
+      paired: Array.isArray(data?.paired) ? data.paired : [],
     };
   } catch {
     return { pending: [], paired: [] };
   }
-}
-
-function getBaseUrl(request: NextRequest): string {
-  const host = request.headers.get("host") || "localhost:3000";
-  const proto = request.headers.get("x-forwarded-proto") || "http";
-  return `${proto}://${host}`;
 }
 
 export async function GET(request: NextRequest) {
@@ -441,14 +432,12 @@ export async function GET(request: NextRequest) {
   const summary = searchParams.get("summary") === "true";
   const section = searchParams.get("section");
 
-  const baseUrl = getBaseUrl(request);
-
   try {
     if (summary) {
       const [channelsPeople, groups, devices, addressBook] = await Promise.all([
         getAllChannelsPeople(),
         getGroups(),
-        getDevicesViaGateway(baseUrl),
+        getDevicesViaGateway(),
         readAddressBook(),
       ]);
       const contactsCount = Object.values(channelsPeople).reduce((n, p) => n + p.allowFrom.length, 0);
@@ -502,14 +491,14 @@ export async function GET(request: NextRequest) {
     }
 
     if (section === "devices") {
-      const devices = await getDevicesViaGateway(baseUrl);
+      const devices = await getDevicesViaGateway();
       return NextResponse.json(devices);
     }
 
     const [people, groups, devices] = await Promise.all([
       getPeople("telegram"),
       getGroups(),
-      getDevicesViaGateway(baseUrl),
+      getDevicesViaGateway(),
     ]);
     const channels = await readOpenClawChannels();
     return NextResponse.json({

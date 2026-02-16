@@ -14,10 +14,23 @@ interface Summary {
   suggestionCount?: number;
 }
 
+const CACHE_KEY = "cc:contacts-summary";
+const CACHE_MAX_AGE = 3 * 60 * 1000;
+
 export function ContactsSummary() {
   const router = useRouter();
-  const [summary, setSummary] = useState<Summary | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [summary, setSummary] = useState<Summary | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = window.localStorage.getItem(CACHE_KEY);
+      if (raw) {
+        const cached = JSON.parse(raw) as { ts: number; data: Summary };
+        if (Date.now() - cached.ts < CACHE_MAX_AGE) return cached.data;
+      }
+    } catch { /* ignore */ }
+    return null;
+  });
+  const [loading, setLoading] = useState(summary === null);
 
   useEffect(() => {
     async function fetchSummary() {
@@ -25,6 +38,9 @@ export function ContactsSummary() {
         const res = await fetch("/api/contacts?summary=true");
         const data = await res.json();
         setSummary(data);
+        try {
+          window.localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
+        } catch { /* full */ }
       } catch {
         setSummary(null);
       } finally {

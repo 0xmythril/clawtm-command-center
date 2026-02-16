@@ -63,20 +63,16 @@ export async function GET() {
       // identity file missing
     }
 
-    // Check if avatar exists
-    let hasAvatar = false;
+    // Check if avatar exists -- parallel stat calls instead of sequential
     const avatarExts = [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"];
-    for (const ext of avatarExts) {
-      try {
-        const stat = await fs.stat(path.join(WORKSPACE_ROOT, `avatar${ext}`));
-        if (stat.isFile()) {
-          hasAvatar = true;
-          break;
-        }
-      } catch {
-        // not found, try next
-      }
-    }
+    const avatarChecks = await Promise.allSettled(
+      avatarExts.map((ext) =>
+        fs.stat(path.join(WORKSPACE_ROOT, `avatar${ext}`)).then((s) => s.isFile())
+      )
+    );
+    const hasAvatar = avatarChecks.some(
+      (r) => r.status === "fulfilled" && r.value === true
+    );
 
     return NextResponse.json({
       name,
