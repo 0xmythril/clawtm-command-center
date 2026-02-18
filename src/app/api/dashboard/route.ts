@@ -5,6 +5,7 @@ import os from "node:os";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { gatewayRequest } from "../gateway/route";
+import { readAgentIdentity, DEFAULT_AGENT_NAME } from "@/lib/agent-identity";
 
 const execFileAsync = promisify(execFile);
 
@@ -13,6 +14,8 @@ const OPENCLAW_CONFIG =
   process.env.OPENCLAW_CONFIG || path.join(OPENCLAW_ROOT, "openclaw.json");
 const IDENTITY_PATH =
   process.env.IDENTITY_PATH || path.join(OPENCLAW_ROOT, "workspace", "IDENTITY.md");
+const SOUL_PATH =
+  process.env.SOUL_PATH || path.join(OPENCLAW_ROOT, "workspace", "SOUL.md");
 const WORKSPACE_ROOT =
   process.env.WORKSPACE_PATH || path.join(OPENCLAW_ROOT, "workspace");
 const SESSIONS_PATH = path.join(
@@ -45,21 +48,6 @@ async function getDiskUsage(): Promise<number> {
   return cachedDiskMb;
 }
 
-function parseIdentity(
-  content: string
-): { name?: string; emoji?: string; description?: string } {
-  const result: { name?: string; emoji?: string; description?: string } = {};
-  for (const line of content.split("\n")) {
-    const nameMatch = line.match(/\*\*Name:\*\*\s*(.+)/);
-    if (nameMatch) result.name = nameMatch[1].trim();
-    const emojiMatch = line.match(/\*\*Emoji:\*\*\s*(.+)/);
-    if (emojiMatch) result.emoji = emojiMatch[1].trim();
-    const creatureMatch = line.match(/\*\*Creature:\*\*\s*(.+)/);
-    if (creatureMatch) result.description = creatureMatch[1].trim();
-  }
-  return result;
-}
-
 /**
  * Single endpoint that returns ALL data needed for the dashboard page.
  * Replaces 7+ separate HTTP requests with 1.
@@ -78,11 +66,11 @@ export async function GET() {
       heartbeatResult,
       proposalsResult,
       heartbeatMdResult,
-      identityResult,
       configResult,
       sessionsResult,
       diskUsedMb,
       avatarChecks,
+      identityResolved,
     ] = await Promise.allSettled([
       // Gateway calls (each may spawn a CLI process, but they run in parallel
       // and benefit from the cache)
@@ -98,7 +86,6 @@ export async function GET() {
       fs.readFile(path.join(WORKSPACE_ROOT, "HEARTBEAT.md"), "utf-8").catch(
         () => ""
       ),
-      fs.readFile(IDENTITY_PATH, "utf-8").catch(() => ""),
       fs.readFile(OPENCLAW_CONFIG, "utf-8").catch(() => ""),
       fs.readFile(SESSIONS_PATH, "utf-8").catch(() => ""),
       // System
@@ -111,6 +98,11 @@ export async function GET() {
             .then((s) => s.isFile())
         )
       ),
+      readAgentIdentity({
+        identityPath: IDENTITY_PATH,
+        soulPath: SOUL_PATH,
+        configPath: OPENCLAW_CONFIG,
+      }),
     ]);
 
     // ── Gateway health ──
@@ -151,24 +143,16 @@ export async function GET() {
         : "";
 
     // ── Agent info ──
-    const identityRaw =
-      identityResult.status === "fulfilled"
-        ? (identityResult.value as string)
-        : "";
     const configRaw =
       configResult.status === "fulfilled"
         ? (configResult.value as string)
         : "";
 
-    let name = "ClawdTM";
-    let emoji = "🦞";
-    let description = "";
-    if (identityRaw) {
-      const parsed = parseIdentity(identityRaw);
-      if (parsed.name) name = parsed.name;
-      if (parsed.emoji) emoji = parsed.emoji;
-      if (parsed.description) description = parsed.description;
-    }
+    const identity =
+      identityResolved.status === "fulfilled" ? identityResolved.value : {};
+    const name = identity.name || DEFAULT_AGENT_NAME;
+    const emoji = identity.emoji || "🦞";
+    const description = identity.description || "";
 
     let model = "unknown";
     let provider = "unknown";

@@ -7,7 +7,7 @@ import { CronTimeline } from "@/components/cron-timeline";
 import { AgentLevelBadge } from "@/components/agent-level";
 import { ChannelLinks } from "@/components/channel-links";
 import { ContactsSummary } from "@/components/contacts-summary";
-import { RefreshCw, Sparkles, Heart, Camera } from "lucide-react";
+import { RefreshCw, Sparkles, Heart, Camera, Pencil, Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CronJob, HeartbeatEvent } from "@/lib/gateway-api";
 import {
@@ -62,6 +62,9 @@ export default function DashboardPage() {
   } | undefined>();
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const [savingName, setSavingName] = useState(false);
   const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -118,6 +121,40 @@ export default function DashboardPage() {
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }, []);
+
+  const beginEditName = useCallback(() => {
+    setNameDraft(agentInfo?.name || "");
+    setEditingName(true);
+  }, [agentInfo?.name]);
+
+  const cancelEditName = useCallback(() => {
+    setEditingName(false);
+    setNameDraft("");
+  }, []);
+
+  const saveAgentName = useCallback(async () => {
+    const nextName = nameDraft.trim();
+    if (!nextName) return;
+    setSavingName(true);
+    try {
+      const res = await fetch("/api/agent-info", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: nextName }),
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload?.error || "Failed to save agent name");
+      }
+
+      setAgentInfo((prev) => ({ ...(prev || {}), name: nextName }));
+      setEditingName(false);
+    } catch (err) {
+      console.error("Agent name update failed:", err);
+    } finally {
+      setSavingName(false);
+    }
+  }, [nameDraft]);
 
   // Single useEffect: hydrate from cache instantly, then fetch fresh data
   useEffect(() => {
@@ -195,9 +232,47 @@ export default function DashboardPage() {
 
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="text-xl sm:text-2xl font-bold truncate">
-                {agentInfo?.name || "Agent"}
-              </h1>
+              {editingName ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    value={nameDraft}
+                    onChange={(e) => setNameDraft(e.target.value)}
+                    maxLength={80}
+                    placeholder="Set agent name"
+                    className="h-9 w-44 sm:w-56 rounded-md border border-zinc-700 bg-zinc-900 px-2 text-sm text-zinc-100 outline-none focus:border-emerald-500"
+                    aria-label="Agent name"
+                  />
+                  <button
+                    onClick={saveAgentName}
+                    disabled={savingName || !nameDraft.trim()}
+                    className="p-1.5 rounded-md border border-zinc-700 hover:border-emerald-500/60 disabled:opacity-50"
+                    title="Save agent name"
+                  >
+                    <Check className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={cancelEditName}
+                    disabled={savingName}
+                    className="p-1.5 rounded-md border border-zinc-700 hover:border-zinc-500 disabled:opacity-50"
+                    title="Cancel"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 min-w-0">
+                  <h1 className="text-xl sm:text-2xl font-bold truncate">
+                    {agentInfo?.name?.trim() || "Set agent name"}
+                  </h1>
+                  <button
+                    onClick={beginEditName}
+                    className="p-1 rounded-md border border-zinc-700 hover:border-emerald-500/60 transition-colors"
+                    title={agentInfo?.name?.trim() ? "Rename agent" : "Set agent name"}
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
               <AgentLevelBadge uptimeSeconds={uptime} />
             </div>
             <div className="flex items-center gap-2 text-xs text-zinc-500">
