@@ -14,6 +14,9 @@ interface ChannelInfo {
   icon: string;
 }
 
+const CACHE_KEY = "cc:channels";
+const CACHE_MAX_AGE = 3 * 60 * 1000;
+
 // Channel brand colors & icons
 const channelMeta: Record<string, { color: string; emoji: string }> = {
   telegram: { color: "from-sky-500/20 to-blue-500/20", emoji: "✈️" },
@@ -26,15 +29,30 @@ const channelMeta: Record<string, { color: string; emoji: string }> = {
 
 export function ChannelLinks() {
   const router = useRouter();
-  const [channels, setChannels] = useState<ChannelInfo[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [channels, setChannels] = useState<ChannelInfo[]>(() => {
+    // Hydrate from cache for instant paint
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = window.localStorage.getItem(CACHE_KEY);
+      if (raw) {
+        const cached = JSON.parse(raw) as { ts: number; data: ChannelInfo[] };
+        if (Date.now() - cached.ts < CACHE_MAX_AGE) return cached.data;
+      }
+    } catch { /* ignore */ }
+    return [];
+  });
+  const [loading, setLoading] = useState(channels.length === 0);
 
   useEffect(() => {
     async function fetchChannels() {
       try {
         const res = await fetch("/api/channels");
         const data = await res.json();
-        setChannels(data.channels || []);
+        const ch = data.channels || [];
+        setChannels(ch);
+        try {
+          window.localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data: ch }));
+        } catch { /* full */ }
       } catch {
         setChannels([]);
       } finally {

@@ -7,15 +7,14 @@ import { CronTimeline } from "@/components/cron-timeline";
 import { AgentLevelBadge } from "@/components/agent-level";
 import { ChannelLinks } from "@/components/channel-links";
 import { ContactsSummary } from "@/components/contacts-summary";
-import { RefreshCw, Sparkles, Heart, Camera } from "lucide-react";
+import { RefreshCw, Sparkles, Heart, Camera, Pencil, Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { CronJob, HeartbeatEvent } from "@/lib/gateway-api";
 import {
-  getCronJobs,
-  getLastHeartbeat,
-  getGatewayHealth,
-  type CronJob,
-  type HeartbeatEvent,
-} from "@/lib/gateway-api";
+  readDashboardCache,
+  writeDashboardCache,
+  type DashboardData,
+} from "@/lib/dashboard-cache";
 
 function formatUptime(ms?: number): string {
   if (!ms) return "—";
@@ -63,31 +62,44 @@ export default function DashboardPage() {
   } | undefined>();
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const [savingName, setSavingName] = useState(false);
   const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Apply dashboard data from any source (cache or fetch)
+  const applyDashboardData = useCallback((data: DashboardData) => {
+    setConnected(data.health.connected);
+    setUptime(data.health.uptime);
+    setCronJobs(data.cronJobs as unknown as CronJob[]);
+    setLastHeartbeat(data.heartbeat as HeartbeatEvent | null);
+    setProposals(data.proposals || "");
+    setHeartbeatMd(data.heartbeatMd || "");
+    setAgentInfo(data.agentInfo);
+    if (data.agentInfo?.hasAvatar) {
+      setAvatarUrl((prev) => prev || `/api/avatar?t=${Date.now()}`);
+    }
+    if (data.systemHealth) setSystemHealth(data.systemHealth);
+  }, []);
+
+  // Single fetch that gets ALL dashboard data in one HTTP request
   const refresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      const [health, jobs, heartbeat, healthData] = await Promise.all([
-        getGatewayHealth(),
-        getCronJobs().catch(() => []),
-        getLastHeartbeat(),
-        fetch("/api/system-health").then((r) => r.json()).catch(() => null),
-      ]);
-      
-      setConnected(health.connected);
-      setUptime(health.uptime);
-      setCronJobs(jobs);
-      setLastHeartbeat(heartbeat);
-      if (healthData && !healthData.error) setSystemHealth(healthData);
+      const res = await fetch("/api/dashboard");
+      const data: DashboardData = await res.json();
+      if (data && !("error" in data)) {
+        applyDashboardData(data);
+        writeDashboardCache(data);
+      }
     } catch (err) {
       console.error("Refresh failed:", err);
       setConnected(false);
     } finally {
       setRefreshing(false);
     }
-  }, []);
+  }, [applyDashboardData]);
 
   // Avatar upload handler
   const handleAvatarUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -99,7 +111,6 @@ export default function DashboardPage() {
       formData.append("file", file);
       const res = await fetch("/api/avatar", { method: "POST", body: formData });
       if (res.ok) {
-        // Bust cache with timestamp
         setAvatarUrl(`/api/avatar?t=${Date.now()}`);
         setAgentInfo(prev => prev ? { ...prev, hasAvatar: true } : prev);
       }
@@ -107,53 +118,59 @@ export default function DashboardPage() {
       console.error("Avatar upload failed:", err);
     } finally {
       setAvatarUploading(false);
-      // Reset input so same file can be re-selected
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }, []);
 
-  // Initial load
-  useEffect(() => {
-    refresh();
-    
-    // Auto-refresh every 30 seconds
-    const interval = setInterval(refresh, 30000);
-    return () => clearInterval(interval);
-  }, [refresh]);
+  const beginEditName = useCallback(() => {
+    setNameDraft(agentInfo?.name || "");
+    setEditingName(true);
+  }, [agentInfo?.name]);
 
-  // Fetch PROPOSALS.md, HEARTBEAT.md, and agent info
-  useEffect(() => {
-    async function fetchWorkspaceFiles() {
-      try {
-        const [proposalsRes, heartbeatRes, agentRes] = await Promise.all([
-          fetch("/api/workspace?file=PROPOSALS.md").catch(() => null),
-          fetch("/api/workspace?file=HEARTBEAT.md").catch(() => null),
-          fetch("/api/agent-info").catch(() => null),
-        ]);
-        
-        if (proposalsRes) {
-          const proposalsData = await proposalsRes.json();
-          setProposals(proposalsData.content || "");
-        }
-
-        if (heartbeatRes) {
-          const heartbeatData = await heartbeatRes.json();
-          setHeartbeatMd(heartbeatData.content || "");
-        }
-
-        if (agentRes) {
-          const agentData = await agentRes.json();
-          setAgentInfo(agentData);
-          if (agentData.hasAvatar) {
-            setAvatarUrl(`/api/avatar?t=${Date.now()}`);
-          }
-        }
-      } catch {
-        // ignore
-      }
-    }
-    fetchWorkspaceFiles();
+  const cancelEditName = useCallback(() => {
+    setEditingName(false);
+    setNameDraft("");
   }, []);
+
+  const saveAgentName = useCallback(async () => {
+    const nextName = nameDraft.trim();
+    if (!nextName) return;
+    setSavingName(true);
+    try {
+      const res = await fetch("/api/agent-info", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: nextName }),
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload?.error || "Failed to save agent name");
+      }
+
+      setAgentInfo((prev) => ({ ...(prev || {}), name: nextName }));
+      setEditingName(false);
+    } catch (err) {
+      console.error("Agent name update failed:", err);
+    } finally {
+      setSavingName(false);
+    }
+  }, [nameDraft]);
+
+  // Single useEffect: hydrate from cache instantly, then fetch fresh data
+  useEffect(() => {
+    // Instant paint from localStorage cache (no spinner on revisit)
+    const cached = readDashboardCache();
+    if (cached) {
+      applyDashboardData(cached);
+    }
+
+    // Fetch fresh data (replaces 7 separate requests with 1)
+    refresh();
+
+    // Auto-refresh every 30s
+    const interval = setInterval(refresh, 30_000);
+    return () => clearInterval(interval);
+  }, [refresh, applyDashboardData]);
 
   const uptimeStr = uptime ? formatUptime(uptime * 1000) : undefined;
   const heartbeatTime = lastHeartbeat?.ts
@@ -215,9 +232,47 @@ export default function DashboardPage() {
 
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="text-xl sm:text-2xl font-bold truncate">
-                {agentInfo?.name || "Agent"}
-              </h1>
+              {editingName ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    value={nameDraft}
+                    onChange={(e) => setNameDraft(e.target.value)}
+                    maxLength={80}
+                    placeholder="Set agent name"
+                    className="h-9 w-44 sm:w-56 rounded-md border border-zinc-700 bg-zinc-900 px-2 text-sm text-zinc-100 outline-none focus:border-emerald-500"
+                    aria-label="Agent name"
+                  />
+                  <button
+                    onClick={saveAgentName}
+                    disabled={savingName || !nameDraft.trim()}
+                    className="p-1.5 rounded-md border border-zinc-700 hover:border-emerald-500/60 disabled:opacity-50"
+                    title="Save agent name"
+                  >
+                    <Check className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={cancelEditName}
+                    disabled={savingName}
+                    className="p-1.5 rounded-md border border-zinc-700 hover:border-zinc-500 disabled:opacity-50"
+                    title="Cancel"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 min-w-0">
+                  <h1 className="text-xl sm:text-2xl font-bold truncate">
+                    {agentInfo?.name?.trim() || "Set agent name"}
+                  </h1>
+                  <button
+                    onClick={beginEditName}
+                    className="p-1 rounded-md border border-zinc-700 hover:border-emerald-500/60 transition-colors"
+                    title={agentInfo?.name?.trim() ? "Rename agent" : "Set agent name"}
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
               <AgentLevelBadge uptimeSeconds={uptime} />
             </div>
             <div className="flex items-center gap-2 text-xs text-zinc-500">
@@ -239,7 +294,11 @@ export default function DashboardPage() {
                 Powered by
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/logo-clawdTM-green.png" alt="" className="w-3 h-3 rounded-full opacity-60" />
-                ClawdTM
+                {(agentInfo?.provider && agentInfo.provider !== "unknown"
+                  ? agentInfo.provider
+                  : "OpenClaw"
+                ).toString()}
+                {agentInfo?.model && agentInfo.model !== "unknown" ? `/${agentInfo.model}` : ""}
               </span>
             </div>
           </div>

@@ -3,9 +3,19 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
-const GATEWAY_TIMEOUT_MS = 30_000;
-const CACHE_TTL_MS = 15_000;
-const CACHEABLE_METHODS = new Set(["status", "health", "system-presence", "last-heartbeat"]);
+const GATEWAY_TIMEOUT_MS = 15_000;
+
+// Tiered cache TTLs: volatile data gets short TTL, stable data gets longer
+const CACHE_TTLS: Record<string, number> = {
+  "status": 10_000,
+  "health": 10_000,
+  "system-presence": 8_000,
+  "last-heartbeat": 10_000,
+  "cron.list": 15_000,
+  "cron.status": 15_000,
+  "skills.status": 30_000,
+  "device.pair.list": 20_000,
+};
 
 type CacheEntry = {
   expiresAt: number;
@@ -22,11 +32,11 @@ function makeCacheKey(method: string, params: unknown): string {
 }
 
 // Use the OpenClaw CLI as a stable gateway transport bridge.
-// This avoids WS auth/context edge-cases in newer OpenClaw versions.
 async function gatewayRequest(method: string, params: unknown = {}): Promise<unknown> {
   const key = makeCacheKey(method, params);
   const now = Date.now();
-  const canCache = CACHEABLE_METHODS.has(method);
+  const ttl = CACHE_TTLS[method];
+  const canCache = ttl !== undefined;
 
   if (canCache) {
     const cached = responseCache.get(key);
@@ -70,8 +80,8 @@ async function gatewayRequest(method: string, params: unknown = {}): Promise<unk
       throw new Error(`Gateway call returned non-JSON output: ${trimmed.slice(0, 400)}`);
     }
 
-    if (canCache) {
-      responseCache.set(key, { data: parsed, expiresAt: Date.now() + CACHE_TTL_MS });
+    if (canCache && ttl) {
+      responseCache.set(key, { data: parsed, expiresAt: Date.now() + ttl });
     }
     return parsed;
   })();
@@ -89,11 +99,32 @@ async function gatewayRequest(method: string, params: unknown = {}): Promise<unk
   }
 }
 
+// Exported for use by other server-side API routes (avoids self-referential HTTP)
+export { gatewayRequest };
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { method, params } = body as { method: string; params?: unknown };
 
+    // Batch mode: { batch: [{ method, params }, ...] }
+    if (Array.isArray(body.batch)) {
+      const calls = body.batch as Array<{ method: string; params?: unknown }>;
+      if (calls.length > 10) {
+        return NextResponse.json({ error: "Max 10 batch calls" }, { status: 400 });
+      }
+      const results = await Promise.allSettled(
+        calls.map((c) => gatewayRequest(c.method, c.params || {}))
+      );
+      const data = results.map((r, i) =>
+        r.status === "fulfilled"
+          ? { ok: true, method: calls[i].method, data: r.value }
+          : { ok: false, method: calls[i].method, error: String(r.reason) }
+      );
+      return NextResponse.json({ ok: true, results: data });
+    }
+
+    // Single call mode
+    const { method, params } = body as { method: string; params?: unknown };
     if (!method) {
       return NextResponse.json({ error: "Method required" }, { status: 400 });
     }

@@ -1,11 +1,17 @@
 import { NextResponse } from "next/server";
 import fs from "node:fs/promises";
 import path from "node:path";
+import {
+  readAgentIdentity,
+  writeAgentName,
+  DEFAULT_AGENT_NAME,
+} from "@/lib/agent-identity";
 
 const OPENCLAW_CONFIG =
   process.env.OPENCLAW_CONFIG || "/home/clawdbot/.openclaw/openclaw.json";
 const IDENTITY_PATH =
   process.env.IDENTITY_PATH || "/home/clawdbot/.openclaw/workspace/IDENTITY.md";
+const SOUL_PATH = process.env.SOUL_PATH || "/home/clawdbot/.openclaw/workspace/SOUL.md";
 const WORKSPACE_ROOT =
   process.env.WORKSPACE_PATH || "/home/clawdbot/.openclaw/workspace";
 
@@ -16,19 +22,6 @@ export interface AgentInfo {
   emoji: string;
   description: string;
   hasAvatar: boolean;
-}
-
-function parseIdentity(content: string): { name?: string; emoji?: string; description?: string } {
-  const result: { name?: string; emoji?: string; description?: string } = {};
-  for (const line of content.split("\n")) {
-    const nameMatch = line.match(/\*\*Name:\*\*\s*(.+)/);
-    if (nameMatch) result.name = nameMatch[1].trim();
-    const emojiMatch = line.match(/\*\*Emoji:\*\*\s*(.+)/);
-    if (emojiMatch) result.emoji = emojiMatch[1].trim();
-    const creatureMatch = line.match(/\*\*Creature:\*\*\s*(.+)/);
-    if (creatureMatch) result.description = creatureMatch[1].trim();
-  }
-  return result;
 }
 
 export async function GET() {
@@ -50,33 +43,25 @@ export async function GET() {
     }
 
     // Read identity for name/emoji
-    let name = "ClawdTM";
-    let emoji = "🦞";
-    let description = "";
-    try {
-      const identityContent = await fs.readFile(IDENTITY_PATH, "utf-8");
-      const parsed = parseIdentity(identityContent);
-      if (parsed.name) name = parsed.name;
-      if (parsed.emoji) emoji = parsed.emoji;
-      if (parsed.description) description = parsed.description;
-    } catch {
-      // identity file missing
-    }
+    const identity = await readAgentIdentity({
+      identityPath: IDENTITY_PATH,
+      soulPath: SOUL_PATH,
+      configPath: OPENCLAW_CONFIG,
+    });
+    const name = identity.name || DEFAULT_AGENT_NAME;
+    const emoji = identity.emoji || "🦞";
+    const description = identity.description || "";
 
-    // Check if avatar exists
-    let hasAvatar = false;
+    // Check if avatar exists -- parallel stat calls instead of sequential
     const avatarExts = [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"];
-    for (const ext of avatarExts) {
-      try {
-        const stat = await fs.stat(path.join(WORKSPACE_ROOT, `avatar${ext}`));
-        if (stat.isFile()) {
-          hasAvatar = true;
-          break;
-        }
-      } catch {
-        // not found, try next
-      }
-    }
+    const avatarChecks = await Promise.allSettled(
+      avatarExts.map((ext) =>
+        fs.stat(path.join(WORKSPACE_ROOT, `avatar${ext}`)).then((s) => s.isFile())
+      )
+    );
+    const hasAvatar = avatarChecks.some(
+      (r) => r.status === "fulfilled" && r.value === true
+    );
 
     return NextResponse.json({
       name,
@@ -89,7 +74,34 @@ export async function GET() {
   } catch (error) {
     console.error("Agent info error:", error);
     return NextResponse.json(
-      { name: "ClawdTM", model: "unknown", provider: "unknown", emoji: "🦞", description: "", hasAvatar: false },
+      { name: DEFAULT_AGENT_NAME, model: "unknown", provider: "unknown", emoji: "🦞", description: "", hasAvatar: false },
+    );
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = (await request.json()) as { name?: unknown };
+    const rawName = typeof body.name === "string" ? body.name : "";
+    const nextName = rawName.trim();
+
+    if (!nextName) {
+      return NextResponse.json({ error: "Name is required" }, { status: 400 });
+    }
+    if (nextName.length > 80) {
+      return NextResponse.json(
+        { error: "Name must be 80 characters or less" },
+        { status: 400 }
+      );
+    }
+
+    await writeAgentName(IDENTITY_PATH, nextName);
+    return NextResponse.json({ ok: true, name: nextName });
+  } catch (error) {
+    console.error("Agent info update error:", error);
+    return NextResponse.json(
+      { error: "Failed to update agent identity" },
+      { status: 500 }
     );
   }
 }
